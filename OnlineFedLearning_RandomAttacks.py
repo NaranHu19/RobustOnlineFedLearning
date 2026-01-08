@@ -17,7 +17,7 @@ def online_federated_averaging_randAttack(server, tot_num_loc_rounds, loc_round_
                                decay_gd=False, decay_factor_gd=0.66, decay_constant_gd=0.1):
     
 
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     server.global_model.to(device)
 
     num_attackers = getattr(attackers, 'f', 0)

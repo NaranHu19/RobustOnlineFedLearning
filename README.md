@@ -37,3 +37,9 @@ This file implements the top-level execution logic for Online Federated Learning
 ### OnlineFedLearning.py
 
 This file provides the primary training orchestration for the Federated Learning system. It implements a standard Online Federated Averaging loop where clients communicate entire trained models back to the server as their updates. While similar to the "Random Attacks" variant, this script focuses on a steady-state training environment, including critical memory management (via garbage collection and CUDA cache clearing) to handle multiple client models on limited hardware.
+
+### UseExample.py
+
+This script provides a comprehensive experimental harness for testing the Robust Federated Learning framework. It demonstrates how to integrate all the system components—from data distribution to robust aggregation—using the MNIST dataset and a Convolutional Neural Network (CNN).
+
+The script is specifically designed for high-scale benchmarking, allowing users to evaluate how different combinations of k-scheduling, adversarial attacks, and defense mechanisms perform under varying levels of data heterogeneity.
