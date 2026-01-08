@@ -8,7 +8,11 @@ from HelperFunc import flat_updates_avg, unflat_updates_avg
 ##### Client #####
 
 class Client:
+    """The Client class represents an honest participant that performs local computation on its private dataset."""
+
     def __init__(self, dataloader, model, optimizer, idx, device):
+        """Initializes the client with its data, a local model instance, and an optimizer. It automatically fetches and moves all data to the specified device (CPU/GPU)."""
+
         self.idx = idx
         self.device = device
         self.dataloader = dataloader
@@ -22,6 +26,8 @@ class Client:
         self.targets = self.targets.to(self.device)
 
     def _fetch_all_data(self):
+      """Internal helper that iterates through the dataloader to concatenate all batches into a single set of tensors for easier local manipulation."""
+
       all_features = []
       all_targets = []
       for inputs, targets in self.dataloader:
@@ -30,11 +36,15 @@ class Client:
       return torch.cat(all_features, dim=0), torch.cat(all_targets, dim=0)
 
     def set_global_model(self, global_model):
-            self.global_model = global_model
-            self.local_model.load_state_dict(global_model.state_dict())
-            self.optimizer.model = self.local_model
+        """Synchronizes the client's local_model with the current state of the global_model received from the server."""
+
+        self.global_model = global_model
+        self.local_model.load_state_dict(global_model.state_dict())
+        self.optimizer.model = self.local_model
 
     def get_model_update(self, methode, batchsize, num_local_rounds, learning_rate, decay=False, decay_factor=1.0, decay_constant=1):
+        """Performs a fixed number of local training rounds using Gradient Descent (GD), Stochastic GD (SGD), or Mini-Batch GD (MBGD) and returns the resulting state dictionary."""
+
         if self.global_model is None:
             print("Debug (Client.get_model_update): Global model not set for the client.")
             raise ValueError("Global model not set for the client.")
@@ -67,6 +77,8 @@ class Client:
         return self.local_model.state_dict()
 
     def get_model_update_decay(self, idx, methode, batch_size, start, end, learning_rate, decay=False, decay_factor=1.0, decay_constant=1):
+        """Similar to get_model_update, but specifically designed for "online" scenarios where training happens over a specific index range within the data, supporting learning rate decay."""
+
         if self.global_model is None:
             print("Debug (Client.get_model_update): Global model not set for the client.")
             raise ValueError("Global model not set for the client.")
@@ -96,6 +108,8 @@ class Client:
         return self.local_model.state_dict()
     
     def online_get_model_update(self, idx, k_sched1, k_sched2, methode, batchsize, learning_rate, decay, decay_factor, decay_constant):
+        """Uses a scheduling mechanism (k_sched) to perform local training on a specific slice of data."""
+
         if self.global_model is None:
             print("Debug (Client.get_model_update): Global model not set for the client.")
             raise ValueError("Global model not set for the client.")
@@ -114,10 +128,16 @@ class Client:
 
 
 class ByzantineClient(byzfl.ByzantineClient):
+    """This class extends byzfl.ByzantineClient to simulate malicious actors in the network. It is used to test the robustness of the server's aggregation rules."""
+
     def __init__(self, attack_params):
+        """Initializes the malicious client with specific attack_params (e.g., bit-flipping, label-flipping, or gradient poisoning parameters)."""
+
         super().__init__(attack_params)
 
     def apply_attack_to_model(self, list_of_model_state_dicts, template_model_state_dict):
+        """Intercepts a list of honest model updates, flattens them into vectors, applies the configured Byzantine attack, and then "unflattens" them back into state dictionaries to mimic real model updates."""
+        
         list_of_flattened_params = []
         for model_state_dict in list_of_model_state_dicts:
             model_parameters = [param for param in model_state_dict.values()]

@@ -7,12 +7,16 @@ import torch.nn.functional as F
     
 class CustomOptimizer:
     def __init__(self, model, lambd=0.1, device=None):
+        """Initializes the optimizer with a model, regularization strength (λ), and hardware device"""
+
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = model
         self.lambd = lambd
         self.loss_history = []
 
     def loss(self, X, y):
+        """Calculates the total loss, combining Cross-Entropy loss for classification and L2 regularization for weight penalization"""
+
         X = X.to(self.device)
         y = y.to(self.device)
         logits = self.model(X)
@@ -25,6 +29,8 @@ class CustomOptimizer:
         return ce_loss + (self.lambd / 2) * l2_reg
 
     def compute_gradients(self, X, y):
+        """Executes a backward pass to compute and extract gradients for all model parameters"""
+
         X = X.to(self.device)
         y = y.to(self.device)
         self.model.zero_grad()
@@ -40,6 +46,8 @@ class CustomOptimizer:
         return gradients
 
     def apply_gradients(self, gradients, lr):
+            """Updates model parameters using the calculated gradients and a specific learning rate."""
+
             with torch.no_grad():
                 for i, param in enumerate(self.model.parameters()):
                     if gradients[i] is not None:
@@ -50,6 +58,8 @@ class CustomOptimizer:
 ### GRADIENT DESCENT - add scheduled/decaying learning rate
 
     def gradient_descent(self, X, y, lr=0.1, max_iters=500, client=False, decay=False, decay_factor=1.0, decay_constant=1):
+        """Performs full-batch Gradient Descent over a set number of iterations or returns averaged gradients for client-side updates."""
+
         X = X.to(self.device)
         y = y.to(self.device)
 
@@ -80,6 +90,8 @@ class CustomOptimizer:
 ### STOCHASTIC GRADEINT DESCENT 
 
     def stochastic_gd(self, X, y, lr=0.01, max_iters=500, client=False, decay=False, decay_factor=1.0, decay_constant=1):
+        """Implements Stochastic Gradient Descent by selecting a single random sample per iteration to update the model."""
+
         X = X.to(self.device)
         y = y.to(self.device)
         
@@ -116,6 +128,8 @@ class CustomOptimizer:
 
 
     def online_stochastic_gd(self, idx, X, y, k_sched1, k_sched2, lr=0.01, client=False, decay=False, decay_factor=0.66, decay_constant=1):
+        """A specialized SGD variant that processes a specific slice of data (from k_sched1 to k_sched2) sequentially."""
+
         X = X.to(self.device)
         y = y.to(self.device)
         
@@ -159,6 +173,8 @@ class CustomOptimizer:
 ### MINI-BATCH GRADIENT DESCENT 
 
     def mini_batch_gd(self, X, y, lr=0.01, batch_size=32, max_iters=500, client=False, decay=False, decay_factor=1.0, decay_constant=1):
+        """Executes optimization using subsets (batches) of data, iterating through the entire dataset multiple times."""
+
         X = X.to(self.device)
         y = y.to(self.device)
 
@@ -196,6 +212,8 @@ class CustomOptimizer:
                 self.loss_history.append(current_loss)
     
     def online_mini_batch_gd(self, idx, X, y, k_sched1, k_sched2, batchsize, lr=0.01, client=False, decay=False, decay_factor=0.66, decay_constant=1):
+        """A mini-batch variant that operates on a targeted data window, commonly used in dynamic scheduling scenarios."""
+        
         X = X.to(self.device)
         y = y.to(self.device)
         

@@ -9,24 +9,31 @@ from HelperFunc import flat_updates_avg, unflat_updates_avg
 
 class Server:
     def __init__(self, model):
+        """Initializes the server with a template model. It creates a deep copy for the global state and initializes tracking lists for clients, loss history, and local training steps."""
+
         self.global_model = deepcopy(model)
         self.clients = []
         self.loss_history = []
         self.local_steps = []
 
     def add_client(self, client):
+        """Registers a client object into the server's internal clients list for participation in rounds."""
+
         self.clients.append(client)
 
     def distribute_model(self):
+        """Clones the current state of the global model and broadcasts it to all registered clients, ensuring every worker starts from the same parameters"""
+
         for client in self.clients:
             client.set_global_model(deepcopy(self.global_model))
     
     def pre_aggregate_methode(self, client_models_updates, num_attackers=0, pre_agg_method='NNM'):
+        """A preprocessing step that filters or modifies client updates layer-by-layer before final aggregation. Currently supports NNM (Nearest Neighbor Mixing) via the byzfl library to enhance robustness"""
+
         if not client_models_updates:
             print("No client model updates received for pre-aggregation.")
             return client_models_updates 
 
-        bucket_size = 1  # Number of vectors per bucket
         n_clients = len(client_models_updates)
 
         if pre_agg_method == 'NNM':
@@ -64,6 +71,8 @@ class Server:
         return pre_aggregated_updates
 
     def aggregate_model_updates(self, client_models_updates, num_attackers=0, aggeg_func='Mean'):
+        """The core robust aggregation logic. It flattens all client model updates into vectors, applies a chosen robust rule, and updates the global model's parameters."""
+
         if not client_models_updates:
             print("No client model updates received for aggregation.")
             return

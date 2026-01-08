@@ -3,6 +3,8 @@ import torch
 import math
 
 def evaluate(model, X, y, device):
+    """Computes the classification accuracy of a model on a given dataset (X,y) using the specified hardware device"""
+
     X = X.to(device)
     y = y.to(device)
     model.eval()
@@ -15,7 +17,8 @@ def evaluate(model, X, y, device):
 ##### K_Scheduling #####
 
 def k_schedule(data_size, loc_round_alpha): 
-    """Return the k-scheduling of aggregation steps based on the client with most data at the beginning of traininig"""
+    """Generates a list of step sizes for local training rounds based on the total data size and a growth factor alpha."""
+
     head = 0
     count = 1
     k_schedule = []
@@ -32,10 +35,14 @@ def k_schedule(data_size, loc_round_alpha):
 ##### ByzFL Library Compatibability #####
 
 def flat_updates_avg(updates):
+    """"Transforms a list of model parameter tensors into a single, contiguous 1D vector to prepare for robust aggregation."""
+
     flattened = torch.cat([update.view(-1) if update is not None else torch.tensor([]) for update in updates])
     return flattened
 
 def unflat_updates_avg(flattened_update, template_updates):
+    """Reverses the flattening process, taking a 1D aggregated vector and reshaping it back into the original tensor structure of the model."""
+
     unflattened_updates = []
     idx = 0
     for original_update in template_updates:
@@ -49,6 +56,8 @@ def unflat_updates_avg(flattened_update, template_updates):
     return unflattened_updates
 
 def flat_updates(client_gradient_lists):
+    """A batch version of the flattening function that processes updates from multiple clients into a list of 1D vectors."""
+
     flattened_updates = []
     for client_gradients in client_gradient_lists:
         flat = torch.cat([grad.view(-1) if grad is not None else torch.tensor([]) for grad in client_gradients])
@@ -57,6 +66,8 @@ def flat_updates(client_gradient_lists):
 
 
 def unflat_updates(flattened_updates, template_gradients):
+    """A batch version of the unflattening function that restores the original tensor shapes for a collection of client updates."""
+
     unflattened_updates = []
     for flat_update in flattened_updates:
         unflat_grads = []

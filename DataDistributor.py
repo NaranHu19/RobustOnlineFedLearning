@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader
 
 class DataDistributor:
     def __init__(self, dataset, num_clients, batch_size, num_classes, distribution='EqStd', dist_param=0.5):
+        """Initializes the distributor with the dataset, the number of participants, batch_size, and the desired distribution strategy (e.g., Dirichlet or Gamma-based Non-IID)."""
+
         self.dataset = dataset
         self.num_clients = num_clients
         self.batch_size = batch_size
@@ -15,16 +17,20 @@ class DataDistributor:
         self.num_classes = num_classes
 
     def iid_idx(self, idx):
+        """Shuffles indices and performs a uniform split to ensure each client receives a representative, statistically identical sample of the global data."""
         random.shuffle(idx)
         return np.array_split(idx, self.num_clients)
 
     def extreme_niid_idx(self, idx):
+        """Sorts data by class labels before splitting, resulting in an "extreme" Non-IID case where clients may only hold data from a very limited number of classes."""
         if len(idx) == 0:
             return list([[]] * self.num_clients)
         sorted_idx = np.array(sorted(zip(self.dataset.targets[idx], idx)))[:, 1]
         return np.array_split(sorted_idx, self.num_clients)
 
     def distribute_data(self):
+        """The main execution logic that applies the chosen distribution strategy and returns a list of PyTorch DataLoader objects—one for each client."""
+        
         data_size = len(self.dataset)
         indices = list(range(data_size))
         np.random.shuffle(indices)
