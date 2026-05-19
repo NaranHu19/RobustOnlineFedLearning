@@ -1,6 +1,7 @@
-# General Imports
-import torch
 import math
+
+import torch
+
 
 def evaluate(model, X, y, device):
     """Computes the classification accuracy of a model on a given dataset (X,y) using the specified hardware device"""

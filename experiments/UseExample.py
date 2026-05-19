@@ -1,29 +1,20 @@
-# General Imports
-import numpy as np
-import sys
 import pickle
 import os
-from copy import deepcopy
-import math
-import torch
-from torchvision import transforms, datasets
-from torch import Tensor
-import torch.nn.functional as F
-import torch.nn as nn
 
-# ByzFL Imports
-import byzfl
 from byzfl import ByzantineClient
 from byzfl.utils.misc import set_random_seed
+import numpy as np
+import torch
+from torchvision import transforms, datasets
 
-# Environemnt 
-from HelperFunc import flat_updates_avg, unflat_updates_avg
-from HelperFunc import evaluate, k_schedule
-from Clients import Client, ByzantineClient
-from Server import Server
+from src.clients import Client, ByzantineClient
+from src.data_distributor import DataDistributor
+from src.models import CNN_MNIST
+from src.optimizer import CustomOptimizer
+from src.server import Server
+
 from OnlineFedLearning_RandomAttacks import online_federated_averaging_randAttack
-from Optimizer import CustomOptimizer
-from DataDistributor import DataDistributor
+
 
 # Data generation parameters
 num_clients = 7
@@ -38,25 +29,6 @@ learning_rate = 0.1   # Not applied given that decay_gd = True (Non constant lea
 tot_num_loc_rounds = 8450
 
 
-class CNN_MNIST(nn.Module):
-    def __init__(self):
-        super().__init__()
-        """Defines a standard Convolutional Neural Network architecture with two convolutional layers and two fully connected layers tailored for MNIST digit classification."""
-        self._c1 = nn.Conv2d(1, 20, 5, 1)
-        self._c2 = nn.Conv2d(20, 50, 5, 1)
-        self._f1 = nn.Linear(800, 500)
-        self._f2 = nn.Linear(500, 10)
-
-    def forward(self, x):
-        """Implements the forward pass of the CNN, utilizing ReLU activations, max-pooling, and log-softmax for the output layer."""
-        x = F.relu(self._c1(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self._c2(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self._f1(x.view(-1, 800)))
-        x = F.log_softmax(self._f2(x), dim=1)
-        return x
-
 # Data
 SEED = 42
 set_random_seed(SEED)
@@ -66,7 +38,7 @@ transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1
 train_dataset = datasets.MNIST(root="XXXX", train=True, download=True, transform=transform)
 
 test_dataset = datasets.MNIST(root="XXXX", train=False, download=True, transform=transform)
-test_dataset.targets = Tensor(test_dataset.targets).long() 
+test_dataset.targets = torch.Tensor(test_dataset.targets).long() 
 
 X_test = torch.stack([test_dataset[i][0] for i in range(len(test_dataset))])  # Shape: [N, 1, 28, 28]
 y_test = torch.tensor([test_dataset[i][1] for i in range(len(test_dataset))])  # Shape: [N]

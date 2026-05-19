@@ -1,9 +1,9 @@
 import random
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-##### DATA DISTRIBUTION #####
 
 class DataDistributor:
     def __init__(self, dataset, num_clients, batch_size, num_classes, distribution='EqStd', dist_param=0.5):

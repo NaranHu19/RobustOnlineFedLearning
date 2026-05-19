@@ -1,11 +1,10 @@
-# General Imports
 from copy import deepcopy
-import torch
+
 import byzfl
+import torch
 
-from HelperFunc import flat_updates_avg, unflat_updates_avg
+from src.utils import flat_updates_avg, unflat_updates_avg
 
-##### Server #####
 
 class Server:
     def __init__(self, model):

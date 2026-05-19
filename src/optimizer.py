@@ -1,10 +1,7 @@
-# PyTorch Imports
 import torch
 import torch.nn.functional as F
 
 
-##### Optimizer Class #####
-    
 class CustomOptimizer:
     def __init__(self, model, lambd=0.1, device=None):
         """Initializes the optimizer with a model, regularization strength (λ), and hardware device"""
