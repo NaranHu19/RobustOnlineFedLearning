@@ -72,7 +72,7 @@ class Client:
                 self.optimizer.mini_batch_gd(X, y, lr=learning_rate, batch_size=batchsize, max_iters=1, client=False, decay=decay, decay_factor=decay_factor, decay_constant=decay_constant)
             else:
                 raise ValueError("Invalid gradient method specified.")
-            
+
         return self.local_model.state_dict()
 
     def get_model_update_decay(self, idx, methode, batch_size, start, end, learning_rate, decay=False, decay_factor=1.0, decay_constant=1):
@@ -103,9 +103,9 @@ class Client:
             self.optimizer.online_mini_batch_gd(idx, X, y, start, end, batchsize=batch_size, lr=learning_rate, client=False, decay=decay, decay_factor=decay_factor, decay_constant=decay_constant)
         else:
             raise ValueError("Invalid gradient method specified.")
-            
+
         return self.local_model.state_dict()
-    
+
     def online_get_model_update(self, idx, k_sched1, k_sched2, methode, batchsize, learning_rate, decay, decay_factor, decay_constant):
         """Uses a scheduling mechanism (k_sched) to perform local training on a specific slice of data."""
 
@@ -119,7 +119,7 @@ class Client:
         y = self.targets
 
         if methode == 'SGD':
-            self.optimizer.online_stochastic_gd(idx, X, y, k_sched1, k_sched2, lr=learning_rate, client=False, decay=decay, decay_factor=decay_factor, decay_constant=decay_constant)            
+            self.optimizer.online_stochastic_gd(idx, X, y, k_sched1, k_sched2, lr=learning_rate, client=False, decay=decay, decay_factor=decay_factor, decay_constant=decay_constant)
         elif methode == 'MBGD':
             self.optimizer.online_mini_batch_gd(idx, X, y, k_sched1, k_sched2, batchsize, lr=learning_rate, client=False, decay=decay, decay_factor=decay_factor, decay_constant=decay_constant)
 
@@ -136,7 +136,7 @@ class ByzantineClient(byzfl.ByzantineClient):
 
     def apply_attack_to_model(self, list_of_model_state_dicts, template_model_state_dict):
         """Intercepts a list of honest model updates, flattens them into vectors, applies the configured Byzantine attack, and then "unflattens" them back into state dictionaries to mimic real model updates."""
-        
+
         list_of_flattened_params = []
         for model_state_dict in list_of_model_state_dicts:
             model_parameters = [param for param in model_state_dict.values()]
@@ -155,4 +155,4 @@ class ByzantineClient(byzfl.ByzantineClient):
                 attacked_state_dict[key] = attacked_parameters[i]
             attacked_state_dicts.append(attacked_state_dict)
 
-        return attacked_state_dicts    
+        return attacked_state_dicts

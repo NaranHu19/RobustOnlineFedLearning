@@ -30,7 +30,7 @@ class DataDistributor:
 
     def distribute_data(self):
         """The main execution logic that applies the chosen distribution strategy and returns a list of PyTorch DataLoader objects—one for each client."""
-        
+
         data_size = len(self.dataset)
         indices = list(range(data_size))
         np.random.shuffle(indices)

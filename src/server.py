@@ -25,7 +25,7 @@ class Server:
 
         for client in self.clients:
             client.set_global_model(deepcopy(self.global_model))
-    
+
     def pre_aggregate_methode(self, client_models_updates, num_attackers=0, pre_agg_method='NNM'):
         """A preprocessing step that filters or modifies client updates layer-by-layer before final aggregation. Currently supports NNM (Nearest Neighbor Mixing) via the byzfl library to enhance robustness"""
 

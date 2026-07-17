@@ -91,7 +91,7 @@ class CustomOptimizer:
 
         X = X.to(self.device)
         y = y.to(self.device)
-        
+
         if client:
             n_samples = X.shape[0]
             idx = torch.randint(0, n_samples, (1,))
@@ -113,7 +113,7 @@ class CustomOptimizer:
 
                 if decay:
                     current_lr = (decay_constant/(i+1)**decay_factor)
-                
+
                 else:
                     current_lr = lr
 
@@ -129,13 +129,13 @@ class CustomOptimizer:
 
         X = X.to(self.device)
         y = y.to(self.device)
-        
+
         if k_sched1 >= X.shape[0]:
             print(f"Client {idx} has used all its data, and does no longer contribute to the update of the global model")
             return
         if k_sched2 > X.shape[0]:
             k_sched2 = X.shape[0]
-        
+
 
         X_batch = X[k_sched1:k_sched2]
         y_batch = y[k_sched1:k_sched2]
@@ -145,19 +145,19 @@ class CustomOptimizer:
         if diff == 0:
             print(f"Client {idx}: Empty batch (k_sched1={k_sched1}, k_sched2={k_sched2}), skipping update.")
             return
-        
+
         if client:
             for i in range(diff):
                 gradients = self.compute_gradients(X_batch[i].unsqueeze(0), y_batch[i].unsqueeze(0))
             return gradients
-        
+
         else:
             self.loss_history = []
 
             for i in range(diff):
                 if decay:
                     current_lr = (decay_constant/(k_sched1 + i+1)**decay_factor)
-                
+
                 else:
                     current_lr = lr
 
@@ -207,19 +207,19 @@ class CustomOptimizer:
 
                 current_loss = self.loss(X, y).item()
                 self.loss_history.append(current_loss)
-    
+
     def online_mini_batch_gd(self, idx, X, y, k_sched1, k_sched2, batchsize, lr=0.01, client=False, decay=False, decay_factor=0.66, decay_constant=1):
         """A mini-batch variant that operates on a targeted data window, commonly used in dynamic scheduling scenarios."""
-        
+
         X = X.to(self.device)
         y = y.to(self.device)
-        
+
         if k_sched1 >= X.shape[0]:
             print(f"Client {idx} has used all its data, and does no longer contribute to the update of the global model")
             return
         if k_sched2 > X.shape[0]:
             k_sched2 = X.shape[0]
-        
+
 
         X_batch = X[k_sched1:k_sched2]
         y_batch = y[k_sched1:k_sched2]
@@ -234,14 +234,14 @@ class CustomOptimizer:
             if remainder > 0:
                 gradients = self.compute_gradients(X_batch[full_batch*batchsize:], y_batch[full_batch*batchsize:])
             return gradients
-        
+
         else:
             self.loss_history = []
 
             for i in range(full_batch):
                 if decay:
                     current_lr = (decay_constant/(k_sched1 + i+1)**decay_factor)
-                
+
                 else:
                     current_lr = lr
 
@@ -253,13 +253,13 @@ class CustomOptimizer:
 
             if remainder > 0:
                 gradients = self.compute_gradients(X_batch[full_batch*batchsize:], y_batch[full_batch*batchsize:])
-                
+
                 if decay:
                     current_lr = (decay_constant/(k_sched1 + full_batch+1)**decay_factor)
-                
+
                 else:
                     current_lr = lr
-                
+
                 self.apply_gradients(gradients, current_lr)
 
                 current_loss = self.loss(X, y).item()

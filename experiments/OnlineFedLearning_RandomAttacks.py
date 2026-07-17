@@ -10,7 +10,6 @@ from src.utils import evaluate, k_schedule
 def online_federated_averaging_randAttack(server, tot_num_loc_rounds, loc_round_alpha, methode, batchsize, learning_rate, X_test, y_test, 
                                output=True, history=False, attackers=0, aggeg_func='Mean', pre_aggreg=False, pre_agg_method='NNM', 
                                decay_gd=False, decay_factor_gd=0.66, decay_constant_gd=0.1):
-    
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     server.global_model.to(device)
@@ -19,7 +18,7 @@ def online_federated_averaging_randAttack(server, tot_num_loc_rounds, loc_round_
     if num_attackers > 0 and 2*num_attackers >= len(server.clients):
         print("Warning: Impossible to train, more Attackers then Honest Clients.")
         return
-    
+
     max_datasize = max([client.features.shape[0] for client in server.clients])
     min_datasize = min([client.features.shape[0] for client in server.clients])
 
@@ -56,13 +55,13 @@ def online_federated_averaging_randAttack(server, tot_num_loc_rounds, loc_round_
                 print(f'The Byzantine Client are: ', *attackers_ids)
             for pos, val in zip(attackers_ids, attacked_state_dict):
                 client_models_updates[pos] = val
-            # client_models_updates.extend(attacked_state_dict) 
+            # client_models_updates.extend(attacked_state_dict)
             # Instead of extending them, just chose randomly f malicious clients and replace their updates with these new ones.
 
         # Server aggregates updates
         if pre_aggreg:
             client_models_updates = server.pre_aggregate_methode(client_models_updates, num_attackers, pre_agg_method)
-            
+
         server.aggregate_model_updates(client_models_updates, num_attackers, aggeg_func)
 
         # Evaluate the global model on test set

@@ -18,7 +18,7 @@ def online_federated_averaging(server, tot_num_loc_rounds, loc_round_alpha, meth
     if num_attackers > 0 and num_attackers > math.ceil((len(server.clients) + num_attackers)/2):
         print("Warning: Impossible to train, more Attackers then Honest Clients.")
         return
-    
+
     max_datasize = max([client.features.shape[0] for client in server.clients])
     min_datasize = min([client.features.shape[0] for client in server.clients])
 
@@ -59,7 +59,7 @@ def online_federated_averaging(server, tot_num_loc_rounds, loc_round_alpha, meth
         # Server aggregates updates
         if pre_aggreg:
             client_models_updates = server.pre_aggregate_methode(client_models_updates, num_attackers, pre_agg_method)
-            
+
         server.aggregate_model_updates(client_models_updates, num_attackers, aggeg_func)
 
         del client_models_updates
