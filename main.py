@@ -1,4 +1,5 @@
-def main():
+def main() -> None:
+    """Print the startup message."""
     print("Hello from robustonlinefedlearning!")
 
 
