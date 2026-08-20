@@ -1,462 +1,262 @@
-from copy import deepcopy
-from typing import Any
-
-import byzfl
 import torch
+import numpy as np
 
-from src.utils import flat_updates_avg, unflat_updates_avg
+from byzfl.utils.conversion import flatten_dict
+
+from src.base_interface import BaseInterface
 
 
-class Client:
-    """Represent an honest participant performing local computation."""
+class OnlineClient(BaseInterface):
 
-    def __init__(
-        self,
-        dataloader: Any,
-        model: Any,
-        optimizer: Any,
-        idx: int,
-        device: torch.device,
-    ) -> None:
+    def __init__(self, params):
+        # Check for correct types and values in params
+        if not isinstance(params, dict):
+            raise TypeError(f"'params' must be of type dict, but got {type(params).__name__}")
+        if not isinstance(params["loss_name"], str):
+            raise TypeError(f"'loss_name' must be of type str, but got {type(params['loss_name']).__name__}")
+        if not isinstance(params["LabelFlipping"], bool):
+            raise TypeError(f"'LabelFlipping' must be of type bool, but got {type(params['LabelFlipping']).__name__}")
+        if not isinstance(params["nb_labels"], int) or not params["nb_labels"] > 1:
+            raise ValueError(f"'nb_labels' must be an integer greater than 1")
+        if not isinstance(params["momentum"], float) or not 0 <= params["momentum"] < 1:
+            raise ValueError(f"'momentum' must be a float in the range [0, 1)")
+        if not isinstance(params["training_dataloader"], torch.utils.data.DataLoader):
+            raise TypeError(f"'training_dataloader' must be a DataLoader, but got {type(params['training_dataloader']).__name__}")
+
+        # Initialize Client instance
+        super().__init__({
+            # Required parameters
+            "model_name": params["model_name"],
+            "device": params["device"],
+            # Optional parameters
+            "learning_rate": params.get("learning_rate", None),
+            "learning_rate_decay": params.get("learning_rate_decay", None),
+            "optimizer_name": params.get("optimizer_name", None),
+        })
+
+        self.criterion = getattr(torch.nn, params["loss_name"])()
+        self.gradient_LF = 0
+        self.labelflipping = params["LabelFlipping"]
+        self.nb_labels = params["nb_labels"]
+        self.momentum = params["momentum"]
+        self.momentum_gradient = torch.zeros_like(
+            torch.cat(tuple(
+                tensor.view(-1) 
+                for tensor in self.model.parameters()
+            )),
+            device=params["device"]
+        )
+        self.training_dataloader = params["training_dataloader"]
+        self.train_iterator = iter(self.training_dataloader)
+        self.store_per_client_metrics = params["store_per_client_metrics"]
+        self.loss_list = list()
+        self.train_acc_list = list()
+
+    def _sample_train_batch(self):
         """
-        Initialize a client with its data, model, optimizer, and device.
-
-        Parameters
-        ----------
-        dataloader : Any
-            DataLoader containing the client's private training data.
-        model : Any
-            Model used for local training.
-        optimizer : Any
-            Optimizer responsible for updating the local model parameters.
-        idx : int
-            Unique identifier assigned to the client.
-        device : torch.device
-            Device on which the model and client data are stored.
-        """
-        self.idx = idx
-        self.device = device
-        self.dataloader = dataloader
-        self.local_model = deepcopy(model).to(self.device)
-        self.optimizer = optimizer
-        self.optimizer.model = self.local_model
-        self.global_model = None
-        self.features, self.targets = self._fetch_all_data()
-        self.features = self.features.to(self.device)
-        self.targets = self.targets.to(self.device)
-
-    def _fetch_all_data(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Fetch and concatenate all batches from the client's dataloader.
+        Description
+        -----------
+        Retrieves the next batch of data from the training dataloader. If the 
+        end of the dataset is reached, the dataloader is reinitialized to start 
+        from the beginning.
 
         Returns
         -------
-        tuple[torch.Tensor, torch.Tensor]
-            A tuple containing all input features and corresponding targets.
+        tuple
+            A tuple containing the input data and corresponding target labels for the current batch.
         """
-        all_features: list[torch.Tensor] = []
-        all_targets: list[torch.Tensor] = []
+        try:
+            return next(self.train_iterator)
+        except StopIteration:
+            self.train_iterator = iter(self.training_dataloader)
+            return next(self.train_iterator)
 
-        for inputs, targets in self.dataloader:
-            all_features.append(inputs.to(self.device))
-            all_targets.append(targets.to(self.device))
-
-        return torch.cat(all_features, dim=0), torch.cat(all_targets, dim=0)
-
-    def set_global_model(self, global_model: Any) -> None:
+    def compute_gradients(self):
         """
-        Synchronize the local model with the current global model.
+        Description
+        -----------
+        Computes the gradients of the local model's loss function for the 
+        current training batch. If the `LabelFlipping` attack is enabled, 
+        gradients for flipped targets are computed and stored separately. 
+        Additionally, the training loss and accuracy for the batch are 
+        computed and recorded.
+        """
+        inputs, targets = self._sample_train_batch()
+        inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+        if self.labelflipping:
+            self.model.eval()
+            targets_flipped = targets.sub(self.nb_labels - 1).mul(-1)
+            self._backward_pass(inputs, targets_flipped)
+            self.gradient_LF = self.get_dict_gradients()
+            self.model.train()
+
+        train_loss_value = self._backward_pass(inputs, targets, train_acc=self.store_per_client_metrics)
+
+        if self.store_per_client_metrics:
+            self.loss_list.append(train_loss_value)
+
+        return train_loss_value
+
+    def _backward_pass(self, inputs, targets, train_acc=False):
+        """
+        Description
+        -----------
+        Performs a backward pass through the model to compute gradients for 
+        the given inputs and targets. Optionally computes training accuracy 
+        for the batch.
 
         Parameters
         ----------
-        global_model : Any
-            Global model whose parameters are copied to the local model.
-
-        Notes
-        -----
-        The optimizer is updated to reference the synchronized local model.
-        """
-        self.global_model = global_model
-        self.local_model.load_state_dict(global_model.state_dict())
-        self.optimizer.model = self.local_model
-
-    def get_model_update(
-        self,
-        methode: str,
-        batchsize: int,
-        num_local_rounds: int,
-        learning_rate: float,
-        decay: bool = False,
-        decay_factor: float = 1.0,
-        decay_constant: float = 1.0,
-    ) -> dict[str, torch.Tensor]:
-        """
-        Perform local training using the selected optimization method.
-
-        Parameters
-        ----------
-        methode : str
-            Optimization method to use. Supported methods are ``"GD"``,
-            ``"SGD"``, and ``"MBGD"``.
-        batchsize : int
-            Number of samples per mini-batch when using ``"MBGD"``.
-        num_local_rounds : int
-            Number of local optimization rounds to perform.
-        learning_rate : float
-            Learning rate used during local optimization.
-        decay : bool, default=False
-            Whether to apply learning-rate decay.
-        decay_factor : float, default=1.0
-            Exponent controlling the learning-rate decay.
-        decay_constant : float, default=1.0
-            Constant used in the learning-rate decay schedule.
+        inputs : torch.Tensor
+            The input data for the batch.
+        targets : torch.Tensor
+            The target labels for the batch.
+        train_acc : bool, optional
+            If True, computes and stores the training accuracy for the batch. 
+            Default is False.
 
         Returns
         -------
-        dict[str, torch.Tensor]
-            State dictionary containing the locally trained model parameters.
+        float
+            The loss value for the current batch.
+        """
+        self.model.zero_grad()
+        outputs = self.model(inputs)
+        loss = self.criterion(outputs, targets)
+        loss_value = loss.item()
+        loss.backward()
+
+        if train_acc:
+            # Compute and store train accuracy
+            _, predicted = torch.max(outputs.data, 1)
+            total = targets.size(0)
+            correct = (predicted == targets).sum().item()
+            acc = correct / total
+            self.train_acc_list.append(acc)
+
+        return loss_value
+
+    def compute_model_update(self, num_rounds):
+        """
+        Description
+        -----------
+        Executes multiple rounds of training updates on the model. For each round,
+        it samples a batch of training data, performs a backward pass to compute
+        gradients, and updates the model parameters. Optionally logs training loss
+        and accuracy.
+
+        Parameters
+        ----------
+        num_rounds : int
+            The number of training iterations to perform. Each iteration includes
+            sampling a batch, computing the loss and gradients, and updating the model.
+
+        Returns
+        -------
+        float
+            The mean loss across all training rounds.
+        """
+
+        losses = np.zeros((num_rounds))
+        for i in range(num_rounds):
+            inputs, targets = self._sample_train_batch()
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+            self.optimizer.zero_grad()
+            train_loss_value = self._backward_pass(inputs, targets, train_acc=self.store_per_client_metrics)
+            losses[i] = train_loss_value
+            self.optimizer.step()
+            self.scheduler.step()
+
+            if self.store_per_client_metrics:
+                self.loss_list.append(train_loss_value)
+
+        return losses.mean()
+
+
+    def get_flat_flipped_gradients(self):
+        """
+        Description
+        -----------
+        Retrieves the gradients computed using flipped targets as a flat array.
+
+        Returns
+        -------
+        numpy.ndarray or torch.Tensor
+            A flat array containing the gradients for the model parameters 
+            when trained with flipped targets.
+        """
+        return flatten_dict(self.gradient_LF)
+
+    def get_flat_gradients_with_momentum(self):
+        """
+        Description
+        -----------
+        Computes the gradients with momentum applied and returns them as a 
+        flat array.
+
+        Returns
+        -------
+        torch.Tensor
+            A flat array containing the gradients with momentum applied.
+        """
+        self.momentum_gradient.mul_(self.momentum)
+        self.momentum_gradient.add_(
+            self.get_flat_gradients(),
+            alpha=1 - self.momentum
+        )
+        return self.momentum_gradient
+
+    def get_loss_list(self):
+        """
+        Description
+        -----------
+        Retrieves the list of training losses recorded over the course of 
+        training.
+
+        Returns
+        -------
+        list
+            A list of float values representing the training losses for each 
+            batch.
+        """
+        return self.loss_list
+
+    def get_train_accuracy(self):
+        """
+        Description
+        -----------
+        Retrieves the training accuracy for each batch processed during 
+        training.
+
+        Returns
+        -------
+        list
+            A list of float values representing the training accuracy for each 
+            batch.
+        """
+        return self.train_acc_list
+
+    def set_model_state(self, state_dict):
+        """
+        Description
+        -----------
+        Updates the state of the model with the provided state dictionary. 
+        This method is used to load a saved model state or update 
+        the global model in a federated learning context.
+        Typically, this method can be used to synchronize clients with the global model.
+
+        Parameters
+        ----------
+        state_dict : dict
+            The state dictionary containing model parameters and buffers.
 
         Raises
         ------
-        ValueError
-            If the global model has not been set or if an unsupported
-            optimization method is specified.
+        TypeError
+            If `state_dict` is not a dictionary.
         """
-        if self.global_model is None:
-            print(
-                "Debug (Client.get_model_update): Global model not set for the client."
-            )
-            raise ValueError("Global model not set for the client.")
-
-        initial_global_model_state_dict = deepcopy(self.global_model.state_dict())
-
-        self.local_model.load_state_dict(self.global_model.state_dict())
-        self.local_model.to(self.device)
-
-        X = self.features
-        y = self.targets
-
-        if X.numel() == 0 or y.numel() == 0:
-            print("Debug (Client.get_model_update): Warning: Client has empty data!")
-
-            zero_update_vector = {
-                key: torch.zeros_like(param)
-                for key, param in initial_global_model_state_dict.items()
-            }
-
-            print(
-                "Debug (Client.get_model_update):"
-                "Returning zero update vector due to empty data."
-            )
-            return zero_update_vector
-
-        for _ in range(num_local_rounds):
-            if methode == "GD":
-                self.optimizer.gradient_descent(
-                    X,
-                    y,
-                    lr=learning_rate,
-                    max_iters=1,
-                    client=False,
-                    decay=decay,
-                    decay_factor=decay_factor,
-                    decay_constant=decay_constant,
-                )
-            elif methode == "SGD":
-                self.optimizer.stochastic_gd(
-                    X,
-                    y,
-                    lr=learning_rate,
-                    max_iters=1,
-                    client=False,
-                    decay=decay,
-                    decay_factor=decay_factor,
-                    decay_constant=decay_constant,
-                )
-            elif methode == "MBGD":
-                self.optimizer.mini_batch_gd(
-                    X,
-                    y,
-                    lr=learning_rate,
-                    batch_size=batchsize,
-                    max_iters=1,
-                    client=False,
-                    decay=decay,
-                    decay_factor=decay_factor,
-                    decay_constant=decay_constant,
-                )
-            else:
-                raise ValueError("Invalid gradient method specified.")
-
-        return self.local_model.state_dict()
-
-    def get_model_update_decay(
-        self,
-        idx: int,
-        methode: str,
-        batch_size: int,
-        start: int,
-        end: int,
-        learning_rate: float,
-        decay: bool = False,
-        decay_factor: float = 1.0,
-        decay_constant: float = 1.0,
-    ) -> dict[str, torch.Tensor]:
-        """
-        Perform online local training over a specified data range.
-
-        Parameters
-        ----------
-        idx : int
-            Identifier of the client performing local training.
-        methode : str
-            Optimization method to use. Supported methods are ``"SGD"``
-            and ``"MBGD"``.
-        batch_size : int
-            Number of samples per mini-batch when using ``"MBGD"``.
-        start : int
-            Starting index of the data range.
-        end : int
-            Exclusive ending index of the data range.
-        learning_rate : float
-            Learning rate used during local optimization.
-        decay : bool, default=False
-            Whether to apply learning-rate decay.
-        decay_factor : float, default=1.0
-            Exponent controlling the learning-rate decay.
-        decay_constant : float, default=1.0
-            Constant used in the learning-rate decay schedule.
-
-        Returns
-        -------
-        dict[str, torch.Tensor]
-            State dictionary containing the locally trained model parameters.
-
-        Raises
-        ------
-        ValueError
-            If the global model has not been set or if an unsupported
-            optimization method is specified.
-        """
-        if self.global_model is None:
-            print(
-                "Debug (Client.get_model_update): Global model not set for the client."
-            )
-            raise ValueError("Global model not set for the client.")
-
-        initial_global_model_state_dict = deepcopy(self.global_model.state_dict())
-
-        self.local_model.load_state_dict(self.global_model.state_dict())
-        self.local_model.to(self.device)
-
-        X = self.features
-        y = self.targets
-
-        if X.numel() == 0 or y.numel() == 0:
-            print("Debug (Client.get_model_update): Warning: Client has empty data!")
-
-            zero_update_vector = {
-                key: torch.zeros_like(param)
-                for key, param in initial_global_model_state_dict.items()
-            }
-
-            print(
-                "Debug (Client.get_model_update):"
-                "Returning zero update vector due to empty data."
-            )
-            return zero_update_vector
-
-        if methode == "SGD":
-            self.optimizer.online_stochastic_gd(
-                idx,
-                X,
-                y,
-                start,
-                end,
-                lr=learning_rate,
-                client=False,
-                decay=decay,
-                decay_factor=decay_factor,
-                decay_constant=decay_constant,
-            )
-        elif methode == "MBGD":
-            self.optimizer.online_mini_batch_gd(
-                idx,
-                X,
-                y,
-                start,
-                end,
-                batchsize=batch_size,
-                lr=learning_rate,
-                client=False,
-                decay=decay,
-                decay_factor=decay_factor,
-                decay_constant=decay_constant,
-            )
-        else:
-            raise ValueError("Invalid gradient method specified.")
-
-        return self.local_model.state_dict()
-
-    def online_get_model_update(
-        self,
-        idx: int,
-        k_sched1: int,
-        k_sched2: int,
-        methode: str,
-        batchsize: int,
-        learning_rate: float,
-        decay: bool,
-        decay_factor: float,
-        decay_constant: float,
-    ) -> dict[str, torch.Tensor]:
-        """
-        Perform local training using a scheduled data slice.
-
-        Parameters
-        ----------
-        idx : int
-            Identifier of the client performing local training.
-        k_sched1 : int
-            Starting index of the scheduled data range.
-        k_sched2 : int
-            Exclusive ending index of the scheduled data range.
-        methode : str
-            Optimization method to use. Supported methods are ``"SGD"``
-            and ``"MBGD"``.
-        batchsize : int
-            Number of samples per mini-batch when using ``"MBGD"``.
-        learning_rate : float
-            Learning rate used during local optimization.
-        decay : bool
-            Whether to apply learning-rate decay.
-        decay_factor : float
-            Exponent controlling the learning-rate decay.
-        decay_constant : float
-            Constant used in the learning-rate decay schedule.
-
-        Returns
-        -------
-        dict[str, torch.Tensor]
-            State dictionary containing the locally trained model parameters.
-
-        Raises
-        ------
-        ValueError
-            If the global model has not been set or if an unsupported
-            optimization method is specified.
-        """
-        if self.global_model is None:
-            print(
-                "Debug (Client.get_model_update): Global model not set for the client."
-            )
-            raise ValueError("Global model not set for the client.")
-
-        self.local_model.load_state_dict(self.global_model.state_dict())
-
-        X = self.features
-        y = self.targets
-
-        if methode == "SGD":
-            self.optimizer.online_stochastic_gd(
-                idx,
-                X,
-                y,
-                k_sched1,
-                k_sched2,
-                lr=learning_rate,
-                client=False,
-                decay=decay,
-                decay_factor=decay_factor,
-                decay_constant=decay_constant,
-            )
-        elif methode == "MBGD":
-            self.optimizer.online_mini_batch_gd(
-                idx,
-                X,
-                y,
-                k_sched1,
-                k_sched2,
-                batchsize,
-                lr=learning_rate,
-                client=False,
-                decay=decay,
-                decay_factor=decay_factor,
-                decay_constant=decay_constant,
-            )
-        else:
-            raise ValueError("Invalid gradient method specified.")
-
-        return self.local_model.state_dict()
-
-
-class ByzantineClient(byzfl.ByzantineClient):  # type: ignore[misc]
-    """
-    Simulate malicious clients that perform Byzantine attacks.
-
-    Extend the byzfl ByzantineClient implementation to apply attacks to
-    model updates before they are returned to the server.
-    """
-
-    def __init__(self, attack_params: dict[str, Any]) -> None:
-        """
-        Initialize the Byzantine client with attack parameters.
-
-        Parameters
-        ----------
-        attack_params : dict[str, Any]
-            Configuration parameters defining the Byzantine attack.
-
-        Notes
-        -----
-        The parameters are passed directly to the parent
-        ``byzfl.ByzantineClient`` implementation.
-        """
-        super().__init__(attack_params)
-
-    def apply_attack_to_model(
-        self,
-        list_of_model_state_dicts: list[dict[str, torch.Tensor]],
-        template_model_state_dict: dict[str, torch.Tensor],
-    ) -> list[dict[str, torch.Tensor]]:
-        """
-        Apply the configured Byzantine attack to model state dictionaries.
-
-        Parameters
-        ----------
-        list_of_model_state_dicts : list[dict[str, torch.Tensor]]
-            Model state dictionaries received from participating clients.
-        template_model_state_dict : dict[str, torch.Tensor]
-            State dictionary defining the expected model parameter structure.
-
-        Returns
-        -------
-        list[dict[str, torch.Tensor]]
-            State dictionaries containing the attacked model updates.
-        """
-        list_of_flattened_params: list[torch.Tensor] = []
-
-        for model_state_dict in list_of_model_state_dicts:
-            model_parameters = list(model_state_dict.values())
-            flattened_params = flat_updates_avg(model_parameters)
-            list_of_flattened_params.append(flattened_params)
-
-        attacked_flattened_params_list = self.apply_attack(list_of_flattened_params)
-
-        attacked_state_dicts: list[dict[str, torch.Tensor]] = []
-        template_parameters = list(template_model_state_dict.values())
-
-        for attacked_flattened_params in attacked_flattened_params_list:
-            attacked_parameters = unflat_updates_avg(
-                attacked_flattened_params,
-                template_parameters,
-            )
-
-            attacked_state_dict = {}
-
-            for i, key in enumerate(template_model_state_dict.keys()):
-                attacked_state_dict[key] = attacked_parameters[i]
-
-            attacked_state_dicts.append(attacked_state_dict)
-
-        return attacked_state_dicts
+        if not isinstance(state_dict, dict):
+            raise TypeError(f"'state_dict' must be of type dict, but got {type(state_dict).__name__}")
+        self.model.load_state_dict(state_dict)
