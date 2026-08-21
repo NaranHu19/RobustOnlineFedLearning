@@ -17,7 +17,7 @@ class FileManager:
         self.files_path = (
             f"{params['result_path']}/"
             f"{params['dataset_name']}_{params['model_name']}_"
-            f"n_{params['nb_client']}_"
+            f"n_{params['nb_clients']}_"
             f"f_{params['nb_byz']}_"
             f"d_{params['declared_nb_byz']}_"
             f"{params['data_distribution_name']}_"
