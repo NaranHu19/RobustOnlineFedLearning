@@ -3,7 +3,7 @@
         "training_algorithm": {
             "name": "RobustOnlineFL",
             "parameters": {
-                "aggreg_freq_scale": [1 + 1e-3, 1.5, 2, 2.5],
+                "aggreg_freq_scale": [1.001, 1.5, 2, 2.5],
                 "aggreg_mult_scale": 1
             }
         },
