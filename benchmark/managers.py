@@ -26,7 +26,6 @@ class FileManager:
             f"{'_'.join(params['pre_aggregation_names'])}_"
             f"{params['attack_name']}_"
             f"lr_{params['learning_rate']}_"
-            f"mom_{params['momentum']}_"
             f"wd_{params['weight_decay']}/"
         )
         os.makedirs(self.files_path, exist_ok=True)
