@@ -37,7 +37,6 @@ class OnlineClient(BaseInterface):
         self.gradient_LF = 0
         self.labelflipping = params["LabelFlipping"]
         self.nb_labels = params["nb_labels"]
-        self.momentum = params["momentum"]
         self.momentum_gradient = torch.zeros_like(
             torch.cat(tuple(
                 tensor.view(-1) 
