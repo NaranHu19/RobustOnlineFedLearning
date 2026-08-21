@@ -266,7 +266,7 @@ def eliminate_experiments_done(dict_list):
             f"{'_'.join(pre_aggregation_names)}_"
             f"{setting['attack']['name']}_"
             f"lr_{setting['model']['learning_rate']}_"
-            f"wd_{setting['honest_clients']['weight_decay']}"
+            f"wd_{setting['model']['weight_decay']}"
         )
 
         if folder_name in folders:
