@@ -9,7 +9,7 @@ from byzfl import Server, ByzantineClient, DataDistributor
 from byzfl.utils.misc import set_random_seed
 
 from src.clients import OnlineClient
-from src.utils import k_schedule
+from src.aggregation_time import k_schedule
 
 from benchmark.managers import ParamsManager, FileManager
 
