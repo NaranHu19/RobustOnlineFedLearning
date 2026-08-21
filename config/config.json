@@ -28,7 +28,8 @@
         "nb_labels": 10,
         "loss": "NLLLoss",
         "learning_rate": 0.1,
-        "learning_rate_decay": 0.1
+        "learning_rate_decay": 0.1,
+        "weight_decay": 0.1
     },
     "aggregator": [
         {

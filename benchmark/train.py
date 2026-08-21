@@ -68,6 +68,7 @@ def start_training(params):
         ],
         "attack_name": params_manager.get_attack_name(),
         "learning_rate": params_manager.get_learning_rate(),
+        "weight_decay": params_manager.get_weight_decay(),
     })
 
     file_manager.save_config_dict(params_manager.get_data())
@@ -151,6 +152,7 @@ def start_training(params):
             "device": params_manager.get_device(),
             "optimizer_name": params_manager.get_optimizer_name(),
             "learning_rate": params_manager.get_learning_rate(),
+            "weight_decay": params_manager.get_weight_decay(),
             "loss_name": params_manager.get_loss_name(),
             "learning_rate_decay": params_manager.get_learning_rate_decay(),
             "LabelFlipping": "LabelFlipping" == params_manager.get_attack_name(),

@@ -34,6 +34,7 @@ class BaseInterface(object):
             self.optimizer = optimizer_class(
                 self.model.parameters(),
                 lr=params["learning_rate"],
+                weight_decay=params["weight_decay"],
             )
 
             gamma=params["learning_rate_decay"]

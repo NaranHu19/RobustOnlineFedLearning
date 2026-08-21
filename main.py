@@ -38,6 +38,7 @@ default_config = {
         "loss": "NLLLoss",
         "learning_rate": 0.1,
         "learning_rate_decay": 1.0,
+        "weight_decay": 0.1,
         "milestones": []
     },
     "aggregator": [
@@ -265,6 +266,7 @@ def eliminate_experiments_done(dict_list):
             f"{'_'.join(pre_aggregation_names)}_"
             f"{setting['attack']['name']}_"
             f"lr_{setting['model']['learning_rate']}_"
+            f"wd_{setting['honest_clients']['weight_decay']}"
         )
 
         if folder_name in folders:

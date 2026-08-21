@@ -31,6 +31,7 @@ class OnlineClient(BaseInterface):
             # Optional parameters
             "learning_rate": params.get("learning_rate", None),
             "learning_rate_decay": params.get("learning_rate_decay", None),
+            "weight_decay": params.get("weight_decay", None),
             "optimizer_name": params.get("optimizer_name", None),
         })
 
