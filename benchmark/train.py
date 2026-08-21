@@ -58,7 +58,7 @@ def start_training(params):
         "data_distribution_name": params_manager.get_name_data_distribution(),
         "distribution_parameter": (
             None if params_manager.get_name_data_distribution() 
-            in ["iid", "extreme_niid"] 
+            in ["iid", "extreme_niid"]
             else params_manager.get_parameter_data_distribution()
         ),
         "aggregation_name": params_manager.get_aggregator_name(),
@@ -75,7 +75,7 @@ def start_training(params):
     # <----------------- Federated Framework ----------------->
 
     # Configurations
-    nb_honest_clients = params_manager.get_nb_honest_clients()
+    nb_clients = params_manager.get_nb_clients(),
     nb_byz_clients = params_manager.get_f()
     nb_training_steps = params_manager.get_nb_steps()
 
@@ -87,8 +87,8 @@ def start_training(params):
     key_dataset_name = params_manager.get_dataset_name()
     dataset_name = dict_datasets[key_dataset_name][0]
     dataset = getattr(datasets, dataset_name)(
-            root = params_manager.get_data_folder(), 
-            train = True, 
+            root = params_manager.get_data_folder(),
+            train = True,
             download = True,
             transform = None
     )
@@ -131,13 +131,13 @@ def start_training(params):
     data_distributor = DataDistributor({
         "data_distribution_name": params_manager.get_name_data_distribution(),
         "distribution_parameter": params_manager.get_parameter_data_distribution(),
-        "nb_honest": nb_honest_clients,
+        "nb_honest": nb_clients,
         "data_loader": train_dataset,
         "batch_size": 1,
     })
     client_dataloaders = data_distributor.split_data()
 
-    max_client_train_size = max(client_dataloaders[i] for i in range(nb_honest_clients))
+    max_client_train_size = max(client_dataloaders[i] for i in range(nb_clients))
     if nb_training_steps > max_client_train_size:
         raise ValueError(
             f"Reduce the maximum amount of local steps, "
@@ -157,7 +157,7 @@ def start_training(params):
             "training_dataloader": client_dataloaders[i],
             "nb_labels": params_manager.get_nb_labels(),
             "store_per_client_metrics": params_manager.get_store_per_client_metrics(),
-        }) for i in range(nb_honest_clients)
+        }) for i in range(nb_clients)
     ]
 
     # Server Setup, Use SGD Optimizer
@@ -205,7 +205,6 @@ def start_training(params):
 
     start_time = time.time()
 
-
     training_algorithm_name = params_manager.get_training_algorithm_name()
 
     if training_algorithm_name not in ["RobustOnlineFL"]:
@@ -215,7 +214,7 @@ def start_training(params):
         )
  
     if attack_name == "LabelFlipping":
-        raise ValueError("FedAvg does not support Label Flipping attack.")
+        raise ValueError("RobustOnlineFL does not support Label Flipping attack.")
 
     training_algorithm_parameters = params_manager.get_training_algorithm_parameters()
 
@@ -237,8 +236,8 @@ def start_training(params):
                 val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
                 file_manager.write_array_in_file(
-                    val_accuracy_list, 
-                    "val_accuracy_tr_seed_" + str(training_seed) 
+                    val_accuracy_list,
+                    "val_accuracy_tr_seed_" + str(training_seed)
                     + "_dd_seed_" + str(dd_seed) +".txt"
                 )
 
@@ -247,8 +246,8 @@ def start_training(params):
                 test_accuracy_list = np.append(test_accuracy_list, test_acc)
 
                 file_manager.write_array_in_file(
-                    test_accuracy_list, 
-                    "test_accuracy_tr_seed_" + str(training_seed) 
+                    test_accuracy_list,
+                    "test_accuracy_tr_seed_" + str(training_seed)
                     + "_dd_seed_" + str(dd_seed) +".txt"
                 )
 
@@ -265,22 +264,25 @@ def start_training(params):
         for client in honest_clients:
             client.set_model_state(new_model)
 
-        idx_selected_honest_clients = np.random.choice(
-            range(nb_honest_clients + nb_byz_clients),
-            size=nb_honest_clients,
+        idx_selected_byz_clients = np.random.choice(
+            nb_clients,
+            size=nb_byz_clients,
             replace=False
         )
 
-        idx_honest_clients = idx_selected_honest_clients[idx_selected_honest_clients <= nb_honest_clients]
+        byz_idx = set(idx_selected_byz_clients)
 
-        train_loss_per_client = np.zeros((len(idx_honest_clients)))
+        train_loss_per_client = []
         honest_weights = []
 
-        for idx, i in enumerate(idx_honest_clients):
-            train_loss_per_client[idx] = honest_clients[i].compute_model_update(local_updates[k])
-            honest_weights.append(honest_clients[i].get_flat_parameters())
+        for i in range(nb_clients):
+            loss = honest_clients[i].compute_model_update(local_updates[k])
 
-        train_loss_list[training_step] = train_loss_per_client.mean()
+            if i not in byz_idx:
+                train_loss_per_client.append(loss)
+                honest_weights.append(honest_clients[i].get_flat_parameters())
+
+        train_loss_list[training_step] = np.mean(train_loss_per_client)
 
         byz_weights = byz_client.apply_attack(honest_weights)
 
@@ -291,8 +293,8 @@ def start_training(params):
     end_time = time.time()
 
     file_manager.write_array_in_file(
-        train_loss_list, 
-        "train_loss_tr_seed_" + str(training_seed) 
+        train_loss_list,
+        "train_loss_tr_seed_" + str(training_seed)
         + "_dd_seed_" + str(dd_seed) +".txt"
     )
 
@@ -303,8 +305,8 @@ def start_training(params):
         val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
         file_manager.write_array_in_file(
-            val_accuracy_list, 
-            "val_accuracy_tr_seed_" + str(training_seed) 
+            val_accuracy_list,
+            "val_accuracy_tr_seed_" + str(training_seed)
             + "_dd_seed_" + str(dd_seed) +".txt"
         )
 
@@ -313,8 +315,8 @@ def start_training(params):
         test_accuracy_list = np.append(test_accuracy_list, test_acc)
 
         file_manager.write_array_in_file(
-            test_accuracy_list, 
-            "test_accuracy_tr_seed_" + str(training_seed) 
+            test_accuracy_list,
+            "test_accuracy_tr_seed_" + str(training_seed)
             + "_dd_seed_" + str(dd_seed) +".txt"
         )
 
