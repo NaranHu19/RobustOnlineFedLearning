@@ -18,8 +18,6 @@ class OnlineClient(BaseInterface):
             raise TypeError(f"'LabelFlipping' must be of type bool, but got {type(params['LabelFlipping']).__name__}")
         if not isinstance(params["nb_labels"], int) or not params["nb_labels"] > 1:
             raise ValueError(f"'nb_labels' must be an integer greater than 1")
-        if not isinstance(params["momentum"], float) or not 0 <= params["momentum"] < 1:
-            raise ValueError(f"'momentum' must be a float in the range [0, 1)")
         if not isinstance(params["training_dataloader"], torch.utils.data.DataLoader):
             raise TypeError(f"'training_dataloader' must be a DataLoader, but got {type(params['training_dataloader']).__name__}")
 
