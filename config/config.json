@@ -20,7 +20,7 @@
                 "name": "dirichlet_niid",
                 "distribution_parameter": [0.2, 1.0, 100.0]
             }
-        ],
+        ]
     },
     "model": {
         "name": "cnn_mnist",
@@ -28,7 +28,7 @@
         "nb_labels": 10,
         "loss": "NLLLoss",
         "learning_rate": 0.1,
-        "learning_rate_decay": 0.1,
+        "learning_rate_decay": 0.1
     },
     "aggregator": [
         {
