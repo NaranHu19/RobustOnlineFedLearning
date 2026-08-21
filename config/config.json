@@ -71,9 +71,9 @@
     "evaluation_and_results": {
         "evaluation_delta": 50,
         "batch_size_evaluation": 128,
-        "evaluate_on_test": True,
-        "store_per_client_metrics": True,
-        "store_models": True,
+        "evaluate_on_test": true,
+        "store_per_client_metrics": true,
+        "store_models": true,
         "data_folder": "./data",
         "results_directory": "./results"
     }
