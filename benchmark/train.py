@@ -76,7 +76,7 @@ def start_training(params):
     # <----------------- Federated Framework ----------------->
 
     # Configurations
-    nb_clients = params_manager.get_nb_clients(),
+    nb_clients = params_manager.get_nb_clients()
     nb_byz_clients = params_manager.get_f()
     nb_training_steps = params_manager.get_nb_steps()
 
