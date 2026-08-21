@@ -69,6 +69,8 @@ def start_training(params):
         "attack_name": params_manager.get_attack_name(),
         "learning_rate": params_manager.get_learning_rate(),
         "weight_decay": params_manager.get_weight_decay(),
+        "aggreg_freq_scale": params_manager.get_training_algorithm_parameters(),
+        "aggreg_mult_scale": params_manager.get_training_algorithm_parameters(),
     })
 
     file_manager.save_config_dict(params_manager.get_data())
@@ -354,6 +356,6 @@ def start_training(params):
 
     file_manager.write_array_in_file(
         np.array(execution_time),
-        "train_time_tr_seed_" + str(training_seed) 
+        "train_time_tr_seed_" + str(training_seed)
         + "_dd_seed_" + str(dd_seed) +".txt"
     )

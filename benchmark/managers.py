@@ -26,7 +26,9 @@ class FileManager:
             f"{'_'.join(params['pre_aggregation_names'])}_"
             f"{params['attack_name']}_"
             f"lr_{params['learning_rate']}_"
-            f"wd_{params['weight_decay']}/"
+            f"wd_{params['weight_decay']}_"
+            f"af_{params['aggreg_freq_scale']}_"
+            f"am_{params['aggreg_mult_scale']}/"
         )
         os.makedirs(self.files_path, exist_ok=True)
 
@@ -261,7 +263,7 @@ class ParamsManager(object):
 
     def get_training_algorithm(self):
         default = {
-            "name": "DSGD",
+            "name": "RobustOnlineFL",
             "parameters": {}
         }
         path = ["benchmark_config", "training_algorithm"]
@@ -269,7 +271,7 @@ class ParamsManager(object):
         return self._parameter_to_use(default, read)
 
     def get_training_algorithm_name(self):
-        default = "DSGD"
+        default = "RobustOnlineFL"
         path = ["benchmark_config", "training_algorithm", "name"]
         read = self._read_object(path)
         return self._parameter_to_use(default, read)
