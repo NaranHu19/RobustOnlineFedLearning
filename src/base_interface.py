@@ -58,7 +58,7 @@ class BaseInterface(object):
         required_keys = ["model_name", "device"]
         if params.get("isServer", False):
             # Required keys for Server, Optional for client
-            required_keys += ["learning_rate", "weight_decay", "milestones", "learning_rate_decay"]
+            required_keys += ["learning_rate", "weight_decay", "learning_rate_decay"]
         for key in required_keys:
             if key not in params:
                 raise KeyError(f"Missing required parameter: {key}")
@@ -74,9 +74,6 @@ class BaseInterface(object):
         if params["weight_decay"] is not None:
             if not isinstance(params["weight_decay"], float) or params["weight_decay"] < 0:
                 raise ValueError("Parameter 'weight_decay' must be a non-negative float.")
-        if params["milestones"] is not None:
-            if not isinstance(params["milestones"], list) or not all(isinstance(x, int) for x in params["milestones"]):
-                raise TypeError("Parameter 'milestones' must be a list of integers.")
         if params["learning_rate_decay"] is not None:
             if not isinstance(params["learning_rate_decay"], float) or params["learning_rate_decay"] <= 0 or params["learning_rate_decay"] > 1.0:
                 raise ValueError("Parameter 'learning_rate_decay' must be a positive float smaller than 1.0.")
