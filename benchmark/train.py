@@ -69,8 +69,8 @@ def start_training(params):
         "attack_name": params_manager.get_attack_name(),
         "learning_rate": params_manager.get_learning_rate(),
         "weight_decay": params_manager.get_weight_decay(),
-        "aggreg_freq_scale": params_manager.get_training_algorithm_parameters(),
-        "aggreg_mult_scale": params_manager.get_training_algorithm_parameters(),
+        "aggreg_freq_scale": params_manager.get_training_algorithm_parameters()["aggreg_freq_scale"],
+        "aggreg_mult_scale": params_manager.get_training_algorithm_parameters()["aggreg_mult_scale"],
     })
 
     file_manager.save_config_dict(params_manager.get_data())
