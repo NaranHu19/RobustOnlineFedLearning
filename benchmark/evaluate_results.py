@@ -82,8 +82,8 @@ def find_best_hyperparameters(path_to_results):
     attacks = data["attack"]
 
     # <-------------- Training Algorithm Config ------------->
-    af_list = data["training_algorithm"]["parameters"]["aggreg_freq_scale"]
-    am_list = data["training_algorithm"]["parameters"]["aggreg_mult_scale"]
+    af_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_freq_scale"]
+    am_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_mult_scale"]
 
     # Ensure certain configurations are always lists
     nb_clients = ensure_list(nb_clients)
@@ -288,8 +288,8 @@ def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=t
         attacks = data["attack"]
 
         # <-------------- Training Algorithm Config ------------->
-        af_list = data["training_algorithm"]["parameters"]["aggreg_freq_scale"]
-        am_list = data["training_algorithm"]["parameters"]["aggreg_mult_scale"]
+        af_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_freq_scale"]
+        am_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_mult_scale"]
 
         # Ensure certain configurations are always lists
         nb_clients = ensure_list(nb_clients)
@@ -464,8 +464,8 @@ def loss_heatmap(path_to_results, path_to_plot):
     attacks = data["attack"]
 
     # <-------------- Training Algorithm Config ------------->
-    af_list = data["training_algorithm"]["parameters"]["aggreg_freq_scale"]
-    am_list = data["training_algorithm"]["parameters"]["aggreg_mult_scale"]
+    af_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_freq_scale"]
+    am_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_mult_scale"]
 
     # Ensure certain configurations are always lists
     nb_clients = ensure_list(nb_clients)
@@ -674,8 +674,8 @@ def test_heatmap(path_to_results, path_to_plot):
     attacks = data["attack"]
 
     # <-------------- Training Algorithm Config ------------->
-    af_list = data["training_algorithm"]["parameters"]["aggreg_freq_scale"]
-    am_list = data["training_algorithm"]["parameters"]["aggreg_mult_scale"]
+    af_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_freq_scale"]
+    am_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_mult_scale"]
 
     # Ensure certain configurations are always lists
     nb_clients = ensure_list(nb_clients)
@@ -882,8 +882,8 @@ def aggregated_test_heatmap(path_to_results, path_to_plot):
     attacks = data["attack"]
 
     # <-------------- Training Algorithm Config ------------->
-    af_list = data["training_algorithm"]["parameters"]["aggreg_freq_scale"]
-    am_list = data["training_algorithm"]["parameters"]["aggreg_mult_scale"]
+    af_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_freq_scale"]
+    am_list = data["benchmark_config"]["training_algorithm"]["parameters"]["aggreg_mult_scale"]
 
     # Ensure certain configurations are always lists
     nb_clients = ensure_list(nb_clients)
