@@ -75,7 +75,6 @@ def find_best_hyperparameters(path_to_results):
     for pre_agg in data["pre_aggregators"]:
         if "parameters" not in pre_agg.keys():
             pre_agg["parameters"] = {}
-
     pre_aggregators = data["pre_aggregators"]
 
     # <-------------- Attacks Config ------------->
@@ -282,6 +281,13 @@ def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=t
 
         # <-------------- Aggregators Config ------------->
         aggregators = data["aggregator"]
+
+        if "pre_aggregators" not in data.keys():
+            data["pre_aggregators"] = []
+
+        for pre_agg in data["pre_aggregators"]:
+            if "parameters" not in pre_agg.keys():
+                pre_agg["parameters"] = {}
         pre_aggregators = data["pre_aggregators"]
 
         # <-------------- Attacks Config ------------->
@@ -458,6 +464,13 @@ def loss_heatmap(path_to_results, path_to_plot):
 
     # <-------------- Aggregators Config ------------->
     aggregators = data["aggregator"]
+
+    if "pre_aggregators" not in data.keys():
+        data["pre_aggregators"] = []
+
+    for pre_agg in data["pre_aggregators"]:
+        if "parameters" not in pre_agg.keys():
+            pre_agg["parameters"] = {}
     pre_aggregators = data["pre_aggregators"]
 
     # <-------------- Attacks Config ------------->
@@ -668,6 +681,13 @@ def test_heatmap(path_to_results, path_to_plot):
 
     # <-------------- Aggregators Config ------------->
     aggregators = data["aggregator"]
+
+    if "pre_aggregators" not in data.keys():
+        data["pre_aggregators"] = []
+
+    for pre_agg in data["pre_aggregators"]:
+        if "parameters" not in pre_agg.keys():
+            pre_agg["parameters"] = {}
     pre_aggregators = data["pre_aggregators"]
 
     # <-------------- Attacks Config ------------->
@@ -876,6 +896,13 @@ def aggregated_test_heatmap(path_to_results, path_to_plot):
 
     # <-------------- Aggregators Config ------------->
     aggregators = data["aggregator"]
+
+    if "pre_aggregators" not in data.keys():
+        data["pre_aggregators"] = []
+
+    for pre_agg in data["pre_aggregators"]:
+        if "parameters" not in pre_agg.keys():
+            pre_agg["parameters"] = {}
     pre_aggregators = data["pre_aggregators"]
 
     # <-------------- Attacks Config ------------->
