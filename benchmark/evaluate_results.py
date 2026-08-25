@@ -68,6 +68,14 @@ def find_best_hyperparameters(path_to_results):
 
     # <-------------- Aggregators Config ------------->
     aggregators = data["aggregator"]
+
+    if "pre_aggregators" not in data.keys():
+        data["pre_aggregators"] = []
+
+    for pre_agg in data["pre_aggregators"]:
+        if "parameters" not in pre_agg.keys():
+            pre_agg["parameters"] = {}
+
     pre_aggregators = data["pre_aggregators"]
 
     # <-------------- Attacks Config ------------->
