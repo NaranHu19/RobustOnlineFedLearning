@@ -266,6 +266,7 @@ def eliminate_experiments_done(dict_list):
             f"{'_'.join(pre_aggregation_names)}_"
             f"{setting['attack']['name']}_"
             f"lr_{setting['model']['learning_rate']}_"
+            f"lrd_{setting['model']['learning_rate_decay']}_"
             f"wd_{setting['model']['weight_decay']}_"
             f"af_{setting['benchmark_config']['training_algorithm']['parameters']['aggreg_freq_scale']}_"
             f"am_{setting['benchmark_config']['training_algorithm']['parameters']['aggreg_mult_scale']}"

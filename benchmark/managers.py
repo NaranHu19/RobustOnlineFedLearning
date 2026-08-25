@@ -26,6 +26,7 @@ class FileManager:
             f"{'_'.join(params['pre_aggregation_names'])}_"
             f"{params['attack_name']}_"
             f"lr_{params['learning_rate']}_"
+            f"lrd_{params['learning_rate_decay']}_"
             f"wd_{params['weight_decay']}_"
             f"af_{params['aggreg_freq_scale']}_"
             f"am_{params['aggreg_mult_scale']}/"
