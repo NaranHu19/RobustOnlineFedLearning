@@ -50,6 +50,7 @@ def start_training(params):
     # <----------------- File Manager  ----------------->
     file_manager = FileManager({
         "result_path": params_manager.get_results_directory(),
+        "model_path": params_manager.get_models_directory(),
         "dataset_name": params_manager.get_dataset_name(),
         "model_name": params_manager.get_model_name(),
         "nb_clients": params_manager.get_nb_clients(),

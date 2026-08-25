@@ -36,6 +36,28 @@ class FileManager:
         with open(os.path.join(self.files_path, "day.txt"), "w") as file:
             file.write(datetime.date.today().strftime("%d_%m_%y"))
 
+        self.models_path = (
+            f"{params['model_path']}/"
+            f"{params['dataset_name']}_{params['model_name']}_"
+            f"n_{params['nb_clients']}_"
+            f"f_{params['nb_byz']}_"
+            f"d_{params['declared_nb_byz']}_"
+            f"{params['data_distribution_name']}_"
+            f"{params['distribution_parameter']}_"
+            f"{params['aggregation_name']}_"
+            f"{'_'.join(params['pre_aggregation_names'])}_"
+            f"{params['attack_name']}_"
+            f"lr_{params['learning_rate']}_"
+            f"lrd_{params['learning_rate_decay']}_"
+            f"wd_{params['weight_decay']}_"
+            f"af_{params['aggreg_freq_scale']}_"
+            f"am_{params['aggreg_mult_scale']}/"
+        )
+        os.makedirs(self.models_path, exist_ok=True)
+
+        with open(os.path.join(self.models_path, "day.txt"), "w") as file:
+            file.write(datetime.date.today().strftime("%d_%m_%y"))
+
     def set_experiment_path(self, path):
         """
         Set the base path for the experiment files.
@@ -68,7 +90,7 @@ class FileManager:
         Save a model's state dictionary under a directory structured by seed values.
         """
         model_dir = os.path.join(
-            self.files_path, f"models_tr_seed_{training_seed}_dd_seed_{data_dist_seed}"
+            self.models_path, f"models_tr_seed_{training_seed}_dd_seed_{data_dist_seed}"
         )
         os.makedirs(model_dir, exist_ok=True)
 
@@ -173,7 +195,8 @@ class ParamsManager(object):
                 "store_per_client_metrics": self.get_store_per_client_metrics(),
                 "store_models": self.get_store_models(),
                 "data_folder": self.get_data_folder(),
-                "results_directory": self.get_results_directory()
+                "results_directory": self.get_results_directory(),
+                "models_directory": self.get_models_directory()
             }
         }
 
@@ -449,5 +472,11 @@ class ParamsManager(object):
     def get_results_directory(self):
         default = "./results"
         path = ["evaluation_and_results", "results_directory"]
+        read = self._read_object(path)
+        return self._parameter_to_use(default, read)
+
+    def get_models_directory(self):
+        default = "./models"
+        path = ["evaluation_and_results", "models_directory"]
         read = self._read_object(path)
         return self._parameter_to_use(default, read)

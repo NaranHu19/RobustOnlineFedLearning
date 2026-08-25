@@ -78,7 +78,8 @@ default_config = {
         "store_per_client_metrics": True,
         "store_models": True,
         "data_folder": "./data",
-        "results_directory": "./results"
+        "results_directory": "./results",
+        "models_directory": "./models"
     }
 }
 
@@ -481,6 +482,9 @@ def ensure_optional_config_parameters(data):
 
     if "results_directory" not in data["evaluation_and_results"].keys():
         data["evaluation_and_results"]["results_directory"] = "./results"
+
+    if "models_directory" not in data["evaluation_and_results"].keys():
+        data["evaluation_and_results"]["models_directory"] = "./models"
 
     if "size_train_set" not in data["benchmark_config"].keys():
         data["benchmark_config"]["size_train_set"] = 0.8
