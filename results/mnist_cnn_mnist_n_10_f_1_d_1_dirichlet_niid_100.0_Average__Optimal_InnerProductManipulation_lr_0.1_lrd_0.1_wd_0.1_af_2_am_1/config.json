@@ -1,0 +1,59 @@
+{
+    "benchmark_config": {
+        "device": "cuda",
+        "training_seed": 2,
+        "nb_training_seeds": 3,
+        "nb_clients": 10,
+        "nb_honest_clients": 9,
+        "f": 1,
+        "tolerated_f": 1,
+        "size_train_set": 0.8,
+        "data_distribution_seed": 0,
+        "nb_data_distribution_seeds": 1,
+        "data_distribution": {
+            "name": "dirichlet_niid",
+            "distribution_parameter": 100.0
+        },
+        "training_algorithm": {
+            "name": "RobustOnlineFL",
+            "parameters": {
+                "aggreg_freq_scale": 2,
+                "aggreg_mult_scale": 1
+            }
+        },
+        "nb_steps": 800
+    },
+    "model": {
+        "name": "cnn_mnist",
+        "dataset_name": "mnist",
+        "nb_labels": 10,
+        "loss": "NLLLoss",
+        "learning_rate": 0.1,
+        "learning_rate_decay": 0.1,
+        "milestones": [],
+        "weight_decay": 0.1
+    },
+    "aggregator": {
+        "name": "Average",
+        "parameters": {
+            "f": 1
+        }
+    },
+    "pre_aggregators": [],
+    "honest_clients": {
+        "batch_size": 1
+    },
+    "attack": {
+        "name": "Optimal_InnerProductManipulation",
+        "parameters": {}
+    },
+    "evaluation_and_results": {
+        "evaluation_delta": 50,
+        "batch_size_evaluation": 128,
+        "evaluate_on_test": true,
+        "store_per_client_metrics": true,
+        "store_models": true,
+        "data_folder": "./data",
+        "results_directory": "./results"
+    }
+}

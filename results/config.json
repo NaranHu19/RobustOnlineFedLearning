@@ -1,0 +1,96 @@
+{
+    "benchmark_config": {
+        "training_algorithm": {
+            "name": "RobustOnlineFL",
+            "parameters": {
+                "aggreg_freq_scale": [
+                    1.001,
+                    1.5,
+                    2,
+                    2.5
+                ],
+                "aggreg_mult_scale": 1
+            }
+        },
+        "nb_steps": 800,
+        "device": "cuda",
+        "training_seed": 0,
+        "nb_training_seeds": 3,
+        "nb_clients": 10,
+        "f": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "data_distribution_seed": 0,
+        "nb_data_distribution_seeds": 1,
+        "data_distribution": [
+            {
+                "name": "dirichlet_niid",
+                "distribution_parameter": [
+                    0.2,
+                    1.0,
+                    100.0
+                ]
+            }
+        ],
+        "size_train_set": 0.8
+    },
+    "model": {
+        "name": "cnn_mnist",
+        "dataset_name": "mnist",
+        "nb_labels": 10,
+        "loss": "NLLLoss",
+        "learning_rate": 0.1,
+        "learning_rate_decay": 0.1,
+        "weight_decay": 0.1
+    },
+    "aggregator": [
+        {
+            "name": "Average",
+            "parameters": {}
+        },
+        {
+            "name": "GeometricMedian",
+            "parameters": {
+                "nu": 0.1,
+                "T": 3
+            }
+        },
+        {
+            "name": "TrMean",
+            "parameters": {}
+        },
+        {
+            "name": "MultiKrum",
+            "parameters": {}
+        }
+    ],
+    "honest_clients": {
+        "batch_size": 1
+    },
+    "attack": [
+        {
+            "name": "SignFlipping",
+            "parameters": {}
+        },
+        {
+            "name": "Optimal_InnerProductManipulation",
+            "parameters": {}
+        },
+        {
+            "name": "Optimal_ALittleIsEnough",
+            "parameters": {}
+        }
+    ],
+    "evaluation_and_results": {
+        "evaluation_delta": 50,
+        "batch_size_evaluation": 128,
+        "evaluate_on_test": true,
+        "store_per_client_metrics": true,
+        "store_models": true,
+        "data_folder": "./data",
+        "results_directory": "./results"
+    }
+}
