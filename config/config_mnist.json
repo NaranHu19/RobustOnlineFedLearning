@@ -7,12 +7,12 @@
                 "aggreg_mult_scale": 1
             }
         },
-        "nb_steps": 800,
+        "nb_steps": 5000,
         "device": "cuda",
         "training_seed": 0,
         "nb_training_seeds": 3,
         "nb_clients": 10,
-        "f": [1, 2, 3, 4],
+        "f": 3,
         "data_distribution_seed": 0,
         "nb_data_distribution_seeds": 1,
         "data_distribution": [
