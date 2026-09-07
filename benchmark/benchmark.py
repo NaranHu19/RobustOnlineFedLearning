@@ -1,7 +1,7 @@
 import copy
 import json
 import os
-from multiprocessing import Pool, Value
+from multiprocessing import get_context
 from multiprocessing.sharedctypes import Synchronized
 from typing import Any
 
@@ -191,19 +191,43 @@ def generate_all_combinations(
 
 # Global variable to keep track of training progress
 counter: Synchronized[int] | None = None
+worker_gpu_id: int | None = None
 
 
-def init_pool_processes(shared_value: Synchronized[int]) -> None:
+def init_pool_processes(
+    shared_value: Synchronized[int],
+    gpu_ids: list[int],
+) -> None:
     """
-    Initialize a global counter variable for multiprocess tracking.
+    Initialize the shared counter and assign one GPU to this worker.
+
+    Workers are assigned GPUs in round-robin order.
 
     Parameters
     ----------
-    shared_value : multiprocessing.Value
-        A shared memory integer used to track the number of finished trainings.
+    shared_value : Synchronized[int]
+        Shared integer used to count completed training jobs.
+    gpu_ids: list[int]
+        Physical GPU IDs available to the worker pool.
     """
-    global counter
+    global counter, worker_gpu_id
+
     counter = shared_value
+
+    # Pool workers are numbered starting from 1.
+    from multiprocessing import current_process
+
+    worker_index = current_process()._identity[0] - 1
+
+    if gpu_ids:
+        worker_gpu_id = gpu_ids[worker_index % len(gpu_ids)]
+
+        # Restrict this process to exactly one physical GPU.
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(worker_gpu_id)
+
+        print(f"Worker {worker_index} assigned to physical GPU {worker_gpu_id}")
+    else:
+        worker_gpu_id = None
 
 
 def run_training(params: dict[str, Any]) -> None:
@@ -221,7 +245,11 @@ def run_training(params: dict[str, Any]) -> None:
         raise RuntimeError("Training counter has not been initialized")
 
     with counter.get_lock():
-        print(f"Training {counter.value} done")
+        if worker_gpu_id is not None:
+            print(f"Training {counter.value} done " f"on physical GPU {worker_gpu_id}")
+        else:
+            print(f"Training {counter.value} done")
+
         counter.value += 1
 
 
@@ -594,7 +622,11 @@ def ensure_optional_config_parameters(
     return data
 
 
-def run_benchmark(cfg_file: str, nb_jobs: int = 1) -> None:
+def run_benchmark(
+    cfg_file: str,
+    nb_jobs: int = 1,
+    gpu_ids: list[int] | None = None,
+) -> None:
     """
     Run the configured benchmark experiments.
 
@@ -604,10 +636,14 @@ def run_benchmark(cfg_file: str, nb_jobs: int = 1) -> None:
 
     Parameters
     ----------
+    cfg_file : str
+        Path to the JSON configuration file describing the benchmark.
     nb_jobs : int, optional
         Number of training experiments to run in parallel.
+    gpu_ids : list[int] or None, optional
+        Physical GPU IDs on which training jobs are allowed to run.
     """
-    # Attempt to load config.json or create one if not found
+    # Attempt to load config file or create one if not found
     try:
         with open(cfg_file) as file:
             data = json.load(file)
@@ -630,6 +666,9 @@ def run_benchmark(cfg_file: str, nb_jobs: int = 1) -> None:
         print("Please configure the experiment you want to run and re-run.")
 
         return
+
+    if gpu_ids is None:
+        gpu_ids = []
 
     # Determine the results directory (default to ./results)
     results_directory = data["evaluation_and_results"]["results_directory"]
@@ -670,11 +709,15 @@ def run_benchmark(cfg_file: str, nb_jobs: int = 1) -> None:
     print(f"Total trainings to do: {len(dict_list)}")
     print(f"Running {nb_jobs} trainings in parallel...")
 
-    shared_counter = Value("i", 0)
+    if gpu_ids:
+        print(f"Using physical GPUs: {gpu_ids}")
 
-    with Pool(
+    ctx = get_context("spawn")
+    shared_counter = ctx.Value("i", 0)
+
+    with ctx.Pool(
         initializer=init_pool_processes,
-        initargs=(shared_counter,),
+        initargs=(shared_counter, gpu_ids),
         processes=nb_jobs,
     ) as pool:
         pool.map(run_training, dict_list)

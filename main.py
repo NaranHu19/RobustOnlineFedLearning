@@ -9,7 +9,7 @@ from benchmark.evaluate_results import (
 )
 
 
-def run_learning(config_file: str, n_jobs: int) -> None:
+def run_learning(config_file: str, n_jobs: int, gpus: list[int]) -> None:
     """
     Run benchmark training experiments.
 
@@ -20,7 +20,7 @@ def run_learning(config_file: str, n_jobs: int) -> None:
     n_jobs : int
         Number of training jobs to run in parallel.
     """
-    run_benchmark(config_file, n_jobs)
+    run_benchmark(config_file, n_jobs, gpus)
 
 
 def run_plotting(dataset: str) -> None:
@@ -74,6 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Number of training jobs to run in parallel.",
     )
+    learning_parser.add_argument(
+        "--gpus",
+        type=list,
+        default=[0],
+        help="GPU IDs to use.",
+    )
 
     plot_parser = subparsers.add_parser(
         "plot",
@@ -98,6 +104,7 @@ def main() -> None:
         run_learning(
             config_file=args.config,
             n_jobs=args.n_jobs,
+            gpus=args.gpus,
         )
     elif args.command == "plot":
         run_plotting(dataset=args.dataset)
