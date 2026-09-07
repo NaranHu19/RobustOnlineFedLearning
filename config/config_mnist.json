@@ -3,7 +3,7 @@
         "training_algorithm": {
             "name": "RobustOnlineFL",
             "parameters": {
-                "aggreg_freq_scale": [1.001, 1.5, 2, 2.5],
+                "aggreg_freq_scale": 1.001,
                 "aggreg_mult_scale": 1
             }
         },
@@ -18,7 +18,7 @@
         "data_distribution": [
             {
                 "name": "dirichlet_niid",
-                "distribution_parameter": [0.2, 1.0, 100.0]
+                "distribution_parameter": 0.2
             }
         ]
     },
@@ -59,14 +59,6 @@
         {
             "name": "SignFlipping",
             "parameters": {}
-        },
-        {
-            "name": "Optimal_InnerProductManipulation",
-            "parameters": {}
-        },
-        {
-            "name": "Optimal_ALittleIsEnough",
-            "parameters": {}
         }
     ],
     "evaluation_and_results": {
@@ -76,6 +68,7 @@
         "store_per_client_metrics": true,
         "store_models": true,
         "data_folder": "./data",
-        "results_directory": "./results"
+        "results_directory": "./results/mnist",
+        "models_directory": "./models/mnist",
     }
 }
