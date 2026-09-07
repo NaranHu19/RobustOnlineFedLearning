@@ -69,6 +69,6 @@
         "store_models": true,
         "data_folder": "./data",
         "results_directory": "./results/mnist",
-        "models_directory": "./models/mnist",
+        "models_directory": "./models/mnist"
     }
 }
