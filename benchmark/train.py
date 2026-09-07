@@ -1,79 +1,97 @@
 import time
+from typing import Any
 
 import numpy as np
+from byzfl import ByzantineClient, DataDistributor, Server
+from byzfl.utils.misc import set_random_seed
 from torch import Tensor
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 
-from byzfl import Server, ByzantineClient, DataDistributor
-from byzfl.utils.misc import set_random_seed
-
-from src.clients import OnlineClient
+from benchmark.managers import FileManager, ParamsManager
 from src.aggregation_time import k_schedule
+from src.clients import OnlineClient
 
-from benchmark.managers import ParamsManager, FileManager
-
-
-transforms_hflip = transforms.Compose([
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor()
-])
-transforms_mnist = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
-])
-transforms_cifar_train = transforms.Compose([
+transforms_hflip = transforms.Compose(
+    [transforms.RandomHorizontalFlip(), transforms.ToTensor()]
+)
+transforms_mnist = transforms.Compose(
+    [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+)
+transforms_cifar_train = transforms.Compose(
+    [
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-transforms_cifar_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
+    ]
+)
+transforms_cifar_test = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ]
+)
 
-#Supported datasets
+# Supported datasets
 dict_datasets = {
-    "mnist":        ("MNIST", transforms_mnist, transforms_mnist),
+    "mnist": ("MNIST", transforms_mnist, transforms_mnist),
     "fashionmnist": ("FashionMNIST", transforms_hflip, transforms_hflip),
-    "emnist":       ("EMNIST", transforms_mnist, transforms_mnist),
-    "cifar10":      ("CIFAR10", transforms_cifar_train, transforms_cifar_test),
-    "cifar100":     ("CIFAR100", transforms_cifar_train, transforms_cifar_test),
-    "imagenet":     ("ImageNet", transforms_hflip, transforms_hflip)
+    "emnist": ("EMNIST", transforms_mnist, transforms_mnist),
+    "cifar10": ("CIFAR10", transforms_cifar_train, transforms_cifar_test),
+    "cifar100": ("CIFAR100", transforms_cifar_train, transforms_cifar_test),
+    "imagenet": ("ImageNet", transforms_hflip, transforms_hflip),
 }
 
 
-def start_training(params):
+def start_training(params: dict[str, Any]) -> None:
+    """
+    Run a federated learning training experiment.
+
+    Initialize the dataset, clients, server, attack, and aggregation
+    strategy from the provided configuration. Train the global model,
+    evaluate it at regular intervals, and store the configured results.
+
+    Parameters
+    ----------
+    params : dict[str, Any]
+        Configuration parameters defining the benchmark experiment.
+    """
     params_manager = ParamsManager(params)
 
     # <----------------- File Manager  ----------------->
-    file_manager = FileManager({
-        "result_path": params_manager.get_results_directory(),
-        "model_path": params_manager.get_models_directory(),
-        "dataset_name": params_manager.get_dataset_name(),
-        "model_name": params_manager.get_model_name(),
-        "nb_clients": params_manager.get_nb_clients(),
-        "nb_byz": params_manager.get_f(),
-        "declared_nb_byz": params_manager.get_tolerated_f(),
-        "data_distribution_name": params_manager.get_name_data_distribution(),
-        "distribution_parameter": (
-            None if params_manager.get_name_data_distribution() 
-            in ["iid", "extreme_niid"]
-            else params_manager.get_parameter_data_distribution()
-        ),
-        "aggregation_name": params_manager.get_aggregator_name(),
-        "pre_aggregation_names": [
-            dict['name'] 
-            for dict in params_manager.get_preaggregators()
-        ],
-        "attack_name": params_manager.get_attack_name(),
-        "learning_rate": params_manager.get_learning_rate(),
-        "learning_rate_decay": params_manager.get_learning_rate_decay(),
-        "weight_decay": params_manager.get_weight_decay(),
-        "aggreg_freq_scale": params_manager.get_training_algorithm_parameters()["aggreg_freq_scale"],
-        "aggreg_mult_scale": params_manager.get_training_algorithm_parameters()["aggreg_mult_scale"],
-    })
+    file_manager = FileManager(
+        {
+            "result_path": params_manager.get_results_directory(),
+            "model_path": params_manager.get_models_directory(),
+            "dataset_name": params_manager.get_dataset_name(),
+            "model_name": params_manager.get_model_name(),
+            "nb_clients": params_manager.get_nb_clients(),
+            "nb_byz": params_manager.get_f(),
+            "declared_nb_byz": params_manager.get_tolerated_f(),
+            "data_distribution_name": params_manager.get_name_data_distribution(),
+            "distribution_parameter": (
+                None
+                if params_manager.get_name_data_distribution()
+                in ["iid", "extreme_niid"]
+                else params_manager.get_parameter_data_distribution()
+            ),
+            "aggregation_name": params_manager.get_aggregator_name(),
+            "pre_aggregation_names": [
+                dict["name"] for dict in params_manager.get_preaggregators()
+            ],
+            "attack_name": params_manager.get_attack_name(),
+            "learning_rate": params_manager.get_learning_rate(),
+            "learning_rate_decay": params_manager.get_learning_rate_decay(),
+            "weight_decay": params_manager.get_weight_decay(),
+            "aggreg_freq_scale": params_manager.get_training_algorithm_parameters()[
+                "aggreg_freq_scale"
+            ],
+            "aggreg_mult_scale": params_manager.get_training_algorithm_parameters()[
+                "aggreg_mult_scale"
+            ],
+        }
+    )
 
     file_manager.save_config_dict(params_manager.get_data())
 
@@ -92,10 +110,7 @@ def start_training(params):
     key_dataset_name = params_manager.get_dataset_name()
     dataset_name = dict_datasets[key_dataset_name][0]
     dataset = getattr(datasets, dataset_name)(
-            root = params_manager.get_data_folder(),
-            train = True,
-            download = True,
-            transform = None
+        root=params_manager.get_data_folder(), train=True, download=True, transform=None
     )
     dataset.targets = Tensor(dataset.targets).long()
 
@@ -112,74 +127,85 @@ def start_training(params):
     # Prepare Validation and Test data
     if len(val_dataset) > 0:
         val_loader = DataLoader(
-            val_dataset, 
-            batch_size=params_manager.get_batch_size_evaluation(), 
-            shuffle=False
+            val_dataset,
+            batch_size=params_manager.get_batch_size_evaluation(),
+            shuffle=False,
         )
     else:
         val_loader = None
 
     test_dataset = getattr(datasets, dataset_name)(
-                root = params_manager.get_data_folder(),
-                train=False,
-                download=True,
-                transform=dict_datasets[key_dataset_name][2]
+        root=params_manager.get_data_folder(),
+        train=False,
+        download=True,
+        transform=dict_datasets[key_dataset_name][2],
     )
 
     test_loader = DataLoader(
         test_dataset,
-        batch_size=params_manager.get_batch_size_evaluation(), 
-        shuffle=False
+        batch_size=params_manager.get_batch_size_evaluation(),
+        shuffle=False,
     )
 
     # Distribute data among clients using non-IID Dirichlet distribution
-    data_distributor = DataDistributor({
-        "data_distribution_name": params_manager.get_name_data_distribution(),
-        "distribution_parameter": params_manager.get_parameter_data_distribution(),
-        "nb_honest": nb_clients,
-        "data_loader": train_dataset,
-        "batch_size": 1,
-    })
+    data_distributor = DataDistributor(
+        {
+            "data_distribution_name": params_manager.get_name_data_distribution(),
+            "distribution_parameter": params_manager.get_parameter_data_distribution(),
+            "nb_honest": nb_clients,
+            "data_loader": train_dataset,
+            "batch_size": 1,
+        }
+    )
     client_dataloaders = data_distributor.split_data()
 
-    max_client_train_size = max(len(client_dataloaders[i].dataset) for i in range(nb_clients))
+    max_client_train_size = max(
+        len(client_dataloaders[i].dataset) for i in range(nb_clients)
+    )
     if nb_training_steps > max_client_train_size:
         raise ValueError(
-            f"Reduce the maximum amount of local steps, "
+            "Reduce the maximum amount of local steps, "
             "as client have not enough data for a complete training."
         )
 
     # Initialize Honest Clients
     honest_clients = [
-        OnlineClient({
+        OnlineClient(
+            {
+                "model_name": params_manager.get_model_name(),
+                "device": params_manager.get_device(),
+                "optimizer_name": params_manager.get_optimizer_name(),
+                "learning_rate": params_manager.get_learning_rate(),
+                "learning_rate_decay": params_manager.get_learning_rate_decay(),
+                "weight_decay": params_manager.get_weight_decay(),
+                "loss_name": params_manager.get_loss_name(),
+                "LabelFlipping": "LabelFlipping" == params_manager.get_attack_name(),
+                "training_dataloader": client_dataloaders[i],
+                "nb_labels": params_manager.get_nb_labels(),
+                "store_per_client_metrics": (
+                    params_manager.get_store_per_client_metrics()
+                ),
+            }
+        )
+        for i in range(nb_clients)
+    ]
+
+    # Server Setup, Use SGD Optimizer
+    server = Server(
+        {
             "model_name": params_manager.get_model_name(),
             "device": params_manager.get_device(),
+            "validation_loader": val_loader,
+            "test_loader": test_loader,
             "optimizer_name": params_manager.get_optimizer_name(),
             "learning_rate": params_manager.get_learning_rate(),
             "learning_rate_decay": params_manager.get_learning_rate_decay(),
             "weight_decay": params_manager.get_weight_decay(),
-            "loss_name": params_manager.get_loss_name(),
-            "LabelFlipping": "LabelFlipping" == params_manager.get_attack_name(),
-            "training_dataloader": client_dataloaders[i],
-            "nb_labels": params_manager.get_nb_labels(),
-            "store_per_client_metrics": params_manager.get_store_per_client_metrics(),
-        }) for i in range(nb_clients)
-    ]
-
-    # Server Setup, Use SGD Optimizer
-    server = Server({
-        "model_name": params_manager.get_model_name(),
-        "device": params_manager.get_device(),
-        "validation_loader": val_loader,
-        "test_loader": test_loader,
-        "optimizer_name": params_manager.get_optimizer_name(),
-        "learning_rate": params_manager.get_learning_rate(),
-        "learning_rate_decay": params_manager.get_learning_rate_decay(),
-        "weight_decay": params_manager.get_weight_decay(),
-        "milestones": params_manager.get_milestones(),
-        "aggregator_info": params_manager.get_aggregator_info(),
-        "pre_agg_list": params_manager.get_preaggregators(),
-    })
+            "milestones": params_manager.get_milestones(),
+            "aggregator_info": params_manager.get_aggregator_info(),
+            "pre_agg_list": params_manager.get_preaggregators(),
+        }
+    )
 
     # Byzantine Client Setup
 
@@ -207,7 +233,7 @@ def start_training(params):
 
     val_accuracy_list = np.array([])
     test_accuracy_list = np.array([])
-    train_loss_list = np.zeros((nb_training_steps))
+    train_loss_list = np.zeros(nb_training_steps)
 
     start_time = time.time()
 
@@ -216,9 +242,9 @@ def start_training(params):
     if training_algorithm_name not in ["RobustOnlineFL"]:
         raise ValueError(
             f"Training algorithm {training_algorithm_name} not supported,"
-                "supported algorithm is 'RobustOnlineFL'"
+            "supported algorithm is 'RobustOnlineFL'"
         )
- 
+
     if attack_name == "LabelFlipping":
         raise ValueError("RobustOnlineFL does not support Label Flipping attack.")
 
@@ -234,17 +260,18 @@ def start_training(params):
     for training_step in range(nb_training_steps):
         # Evaluate Global Model Every Evaluation Delta Steps
         if training_step % evaluation_delta == 0:
-
             if val_loader is not None:
-
                 val_acc = server.compute_validation_accuracy()
 
                 val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
                 file_manager.write_array_in_file(
                     val_accuracy_list,
-                    "val_accuracy_tr_seed_" + str(training_seed)
-                    + "_dd_seed_" + str(dd_seed) +".txt"
+                    "val_accuracy_tr_seed_"
+                    + str(training_seed)
+                    + "_dd_seed_"
+                    + str(dd_seed)
+                    + ".txt",
                 )
 
             if evaluate_on_test:
@@ -253,16 +280,16 @@ def start_training(params):
 
                 file_manager.write_array_in_file(
                     test_accuracy_list,
-                    "test_accuracy_tr_seed_" + str(training_seed)
-                    + "_dd_seed_" + str(dd_seed) +".txt"
+                    "test_accuracy_tr_seed_"
+                    + str(training_seed)
+                    + "_dd_seed_"
+                    + str(dd_seed)
+                    + ".txt",
                 )
 
             if store_models:
                 file_manager.save_state_dict(
-                    server.get_dict_parameters(),
-                    training_seed,
-                    dd_seed,
-                    training_step
+                    server.get_dict_parameters(), training_seed, dd_seed, training_step
                 )
 
         # Send Updated Model to Clients
@@ -271,9 +298,7 @@ def start_training(params):
             client.set_model_state(new_model)
 
         idx_selected_byz_clients = np.random.choice(
-            nb_clients,
-            size=nb_byz_clients,
-            replace=False
+            nb_clients, size=nb_byz_clients, replace=False
         )
 
         byz_idx = set(idx_selected_byz_clients)
@@ -300,20 +325,25 @@ def start_training(params):
 
     file_manager.write_array_in_file(
         train_loss_list,
-        "train_loss_tr_seed_" + str(training_seed)
-        + "_dd_seed_" + str(dd_seed) +".txt"
+        "train_loss_tr_seed_"
+        + str(training_seed)
+        + "_dd_seed_"
+        + str(dd_seed)
+        + ".txt",
     )
 
     if val_loader is not None:
-
         val_acc = server.compute_validation_accuracy()
 
         val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
         file_manager.write_array_in_file(
             val_accuracy_list,
-            "val_accuracy_tr_seed_" + str(training_seed)
-            + "_dd_seed_" + str(dd_seed) +".txt"
+            "val_accuracy_tr_seed_"
+            + str(training_seed)
+            + "_dd_seed_"
+            + str(dd_seed)
+            + ".txt",
         )
 
     if evaluate_on_test:
@@ -322,42 +352,34 @@ def start_training(params):
 
         file_manager.write_array_in_file(
             test_accuracy_list,
-            "test_accuracy_tr_seed_" + str(training_seed)
-            + "_dd_seed_" + str(dd_seed) +".txt"
+            "test_accuracy_tr_seed_"
+            + str(training_seed)
+            + "_dd_seed_"
+            + str(dd_seed)
+            + ".txt",
         )
 
     if store_per_client_metrics:
-
         for client_id, client in enumerate(honest_clients):
-            loss = client.get_loss_list()
+            client_loss = client.get_loss_list()
             acc = client.get_train_accuracy()
 
-            file_manager.save_loss(
-                loss,
-                training_seed,
-                dd_seed,
-                client_id
-            )
+            file_manager.save_loss(client_loss, training_seed, dd_seed, client_id)
 
-            file_manager.save_accuracy(
-                acc,
-                training_seed,
-                dd_seed,
-                client_id
-            )
- 
+            file_manager.save_accuracy(acc, training_seed, dd_seed, client_id)
+
     if store_models:
         file_manager.save_state_dict(
-            server.get_dict_parameters(),
-            training_seed,
-            dd_seed,
-            training_step
+            server.get_dict_parameters(), training_seed, dd_seed, training_step
         )
 
     execution_time = end_time - start_time
 
     file_manager.write_array_in_file(
         np.array(execution_time),
-        "train_time_tr_seed_" + str(training_seed)
-        + "_dd_seed_" + str(dd_seed) +".txt"
+        "train_time_tr_seed_"
+        + str(training_seed)
+        + "_dd_seed_"
+        + str(dd_seed)
+        + ".txt",
     )

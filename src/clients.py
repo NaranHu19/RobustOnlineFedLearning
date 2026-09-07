@@ -1,67 +1,106 @@
-import torch
-import numpy as np
+from collections.abc import Iterator
+from typing import Any, cast
 
+import numpy as np
+import torch
 from byzfl.utils.conversion import flatten_dict
 
 from src.base_interface import BaseInterface
 
 
 class OnlineClient(BaseInterface):
+    """
+    Represent a client performing local online federated learning.
 
-    def __init__(self, params):
+    Parameters
+    ----------
+    params : dict[str, Any]
+        Configuration parameters used to initialize the client, model,
+        optimizer, loss function, and training dataloader.
+    """
+
+    def __init__(self, params: dict[str, Any]) -> None:
         # Check for correct types and values in params
         if not isinstance(params, dict):
-            raise TypeError(f"'params' must be of type dict, but got {type(params).__name__}")
+            raise TypeError(
+                f"'params' must be of type dict, " f"but got {type(params).__name__}"
+            )
+
         if not isinstance(params["loss_name"], str):
-            raise TypeError(f"'loss_name' must be of type str, but got {type(params['loss_name']).__name__}")
+            raise TypeError(
+                "'loss_name' must be of type str, "
+                f"but got {type(params['loss_name']).__name__}"
+            )
+
         if not isinstance(params["LabelFlipping"], bool):
-            raise TypeError(f"'LabelFlipping' must be of type bool, but got {type(params['LabelFlipping']).__name__}")
-        if not isinstance(params["nb_labels"], int) or not params["nb_labels"] > 1:
-            raise ValueError(f"'nb_labels' must be an integer greater than 1")
-        if not isinstance(params["training_dataloader"], torch.utils.data.DataLoader):
-            raise TypeError(f"'training_dataloader' must be a DataLoader, but got {type(params['training_dataloader']).__name__}")
+            raise TypeError(
+                "'LabelFlipping' must be of type bool, "
+                f"but got {type(params['LabelFlipping']).__name__}"
+            )
+
+        if not isinstance(params["nb_labels"], int) or params["nb_labels"] <= 1:
+            raise ValueError("'nb_labels' must be an integer greater than 1")
+
+        if not isinstance(
+            params["training_dataloader"],
+            torch.utils.data.DataLoader,
+        ):
+            raise TypeError(
+                "'training_dataloader' must be a DataLoader, "
+                "but got "
+                f"{type(params['training_dataloader']).__name__}"
+            )
 
         # Initialize Client instance
-        super().__init__({
-            # Required parameters
-            "model_name": params["model_name"],
-            "device": params["device"],
-            # Optional parameters
-            "learning_rate": params.get("learning_rate", None),
-            "learning_rate_decay": params.get("learning_rate_decay", None),
-            "weight_decay": params.get("weight_decay", None),
-            "optimizer_name": params.get("optimizer_name", None),
-        })
+        super().__init__(
+            {
+                # Required parameters
+                "model_name": params["model_name"],
+                "device": params["device"],
+                # Optional parameters
+                "learning_rate": params.get("learning_rate", None),
+                "learning_rate_decay": params.get(
+                    "learning_rate_decay",
+                    None,
+                ),
+                "weight_decay": params.get("weight_decay", None),
+                "optimizer_name": params.get("optimizer_name", None),
+            }
+        )
 
         self.criterion = getattr(torch.nn, params["loss_name"])()
-        self.gradient_LF = 0
+        self.gradient_LF = torch.Tensor([0])
         self.labelflipping = params["LabelFlipping"]
         self.nb_labels = params["nb_labels"]
-        self.momentum_gradient = torch.zeros_like(
-            torch.cat(tuple(
-                tensor.view(-1) 
-                for tensor in self.model.parameters()
-            )),
-            device=params["device"]
-        )
-        self.training_dataloader = params["training_dataloader"]
-        self.train_iterator = iter(self.training_dataloader)
-        self.store_per_client_metrics = params["store_per_client_metrics"]
-        self.loss_list = list()
-        self.train_acc_list = list()
 
-    def _sample_train_batch(self):
+        self.momentum_gradient = torch.zeros_like(
+            torch.cat(tuple(tensor.view(-1) for tensor in self.model.parameters())),
+            device=params["device"],
+        )
+
+        self.training_dataloader = params["training_dataloader"]
+        self.train_iterator: Iterator[tuple[torch.Tensor, torch.Tensor]] = iter(
+            self.training_dataloader
+        )
+
+        self.store_per_client_metrics = params["store_per_client_metrics"]
+        self.loss_list: list[float] = list()
+        self.train_acc_list: list[float] = list()
+
+    def _sample_train_batch(
+        self,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Description
-        -----------
-        Retrieves the next batch of data from the training dataloader. If the 
-        end of the dataset is reached, the dataloader is reinitialized to start 
-        from the beginning.
+        Retrieve the next training batch.
+
+        Reinitialize the dataloader iterator when the end of the dataset
+        is reached.
 
         Returns
         -------
-        tuple
-            A tuple containing the input data and corresponding target labels for the current batch.
+        tuple[torch.Tensor, torch.Tensor]
+            Input data and corresponding target labels for the current
+            batch.
         """
         try:
             return next(self.train_iterator)
@@ -69,55 +108,71 @@ class OnlineClient(BaseInterface):
             self.train_iterator = iter(self.training_dataloader)
             return next(self.train_iterator)
 
-    def compute_gradients(self):
+    def compute_gradients(self) -> float:
         """
-        Description
-        -----------
-        Computes the gradients of the local model's loss function for the 
-        current training batch. If the `LabelFlipping` attack is enabled, 
-        gradients for flipped targets are computed and stored separately. 
-        Additionally, the training loss and accuracy for the batch are 
-        computed and recorded.
+        Compute gradients for the current training batch.
+
+        Compute the local model loss and gradients. When label flipping
+        is enabled, also compute and store gradients using flipped labels.
+        Optionally record the training loss and accuracy.
+
+        Returns
+        -------
+        float
+            Loss value for the current training batch.
         """
         inputs, targets = self._sample_train_batch()
-        inputs, targets = inputs.to(self.device), targets.to(self.device)
+        inputs = inputs.to(self.device)
+        targets = targets.to(self.device)
 
         if self.labelflipping:
             self.model.eval()
             targets_flipped = targets.sub(self.nb_labels - 1).mul(-1)
-            self._backward_pass(inputs, targets_flipped)
+
+            self._backward_pass(
+                inputs,
+                targets_flipped,
+            )
             self.gradient_LF = self.get_dict_gradients()
             self.model.train()
 
-        train_loss_value = self._backward_pass(inputs, targets, train_acc=self.store_per_client_metrics)
+        train_loss_value = self._backward_pass(
+            inputs,
+            targets,
+            train_acc=self.store_per_client_metrics,
+        )
 
         if self.store_per_client_metrics:
             self.loss_list.append(train_loss_value)
 
         return train_loss_value
 
-    def _backward_pass(self, inputs, targets, train_acc=False):
+    def _backward_pass(
+        self,
+        inputs: torch.Tensor,
+        targets: torch.Tensor,
+        train_acc: bool = False,
+    ) -> float:
         """
-        Description
-        -----------
-        Performs a backward pass through the model to compute gradients for 
-        the given inputs and targets. Optionally computes training accuracy 
-        for the batch.
+        Perform a backward pass through the model.
+
+        Compute the loss and gradients for the provided inputs and
+        targets. Optionally compute and store the training accuracy.
 
         Parameters
         ----------
         inputs : torch.Tensor
-            The input data for the batch.
+            Input data for the batch.
         targets : torch.Tensor
-            The target labels for the batch.
+            Target labels for the batch.
         train_acc : bool, optional
-            If True, computes and stores the training accuracy for the batch. 
-            Default is False.
+            Whether to compute and store training accuracy. The default
+            is False.
 
         Returns
         -------
         float
-            The loss value for the current batch.
+            Loss value for the current batch.
         """
         self.model.zero_grad()
         outputs = self.model(inputs)
@@ -126,129 +181,107 @@ class OnlineClient(BaseInterface):
         loss.backward()
 
         if train_acc:
-            # Compute and store train accuracy
             _, predicted = torch.max(outputs.data, 1)
             total = targets.size(0)
             correct = (predicted == targets).sum().item()
             acc = correct / total
             self.train_acc_list.append(acc)
 
-        return loss_value
+        return float(loss_value)
 
-    def compute_model_update(self, num_rounds):
+    def compute_model_update(self, num_rounds: int) -> float:
         """
-        Description
-        -----------
-        Executes multiple rounds of training updates on the model. For each round,
-        it samples a batch of training data, performs a backward pass to compute
-        gradients, and updates the model parameters. Optionally logs training loss
-        and accuracy.
+        Perform multiple local model update rounds.
+
+        Sample training batches, compute gradients, update model
+        parameters, and optionally record training metrics.
 
         Parameters
         ----------
         num_rounds : int
-            The number of training iterations to perform. Each iteration includes
-            sampling a batch, computing the loss and gradients, and updating the model.
+            Number of local training iterations to perform.
 
         Returns
         -------
         float
-            The mean loss across all training rounds.
+            Mean loss across all local training rounds.
         """
+        losses = np.zeros(num_rounds)
 
-        losses = np.zeros((num_rounds))
         for i in range(num_rounds):
             inputs, targets = self._sample_train_batch()
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
 
             self.optimizer.zero_grad()
-            train_loss_value = self._backward_pass(inputs, targets, train_acc=self.store_per_client_metrics)
+
+            train_loss_value = self._backward_pass(
+                inputs,
+                targets,
+                train_acc=self.store_per_client_metrics,
+            )
+
             losses[i] = train_loss_value
+
             self.optimizer.step()
             self.scheduler.step()
 
             if self.store_per_client_metrics:
                 self.loss_list.append(train_loss_value)
 
-        return losses.mean()
+        return float(losses.mean())
 
-
-    def get_flat_flipped_gradients(self):
+    def get_flat_flipped_gradients(self) -> torch.Tensor:
         """
-        Description
-        -----------
-        Retrieves the gradients computed using flipped targets as a flat array.
-
-        Returns
-        -------
-        numpy.ndarray or torch.Tensor
-            A flat array containing the gradients for the model parameters 
-            when trained with flipped targets.
-        """
-        return flatten_dict(self.gradient_LF)
-
-    def get_flat_gradients_with_momentum(self):
-        """
-        Description
-        -----------
-        Computes the gradients with momentum applied and returns them as a 
-        flat array.
+        Return gradients computed with flipped targets.
 
         Returns
         -------
         torch.Tensor
-            A flat array containing the gradients with momentum applied.
+            Flattened tensor containing gradients computed from flipped
+            target labels.
         """
-        self.momentum_gradient.mul_(self.momentum)
-        self.momentum_gradient.add_(
-            self.get_flat_gradients(),
-            alpha=1 - self.momentum
+        return cast(
+            torch.Tensor,
+            flatten_dict(self.gradient_LF),
         )
-        return self.momentum_gradient
 
-    def get_loss_list(self):
+    def get_loss_list(self) -> list[float]:
         """
-        Description
-        -----------
-        Retrieves the list of training losses recorded over the course of 
-        training.
+        Return recorded training losses.
 
         Returns
         -------
-        list
-            A list of float values representing the training losses for each 
-            batch.
+        list[float]
+            Training losses recorded during local training.
         """
         return self.loss_list
 
-    def get_train_accuracy(self):
+    def get_train_accuracy(self) -> list[float]:
         """
-        Description
-        -----------
-        Retrieves the training accuracy for each batch processed during 
-        training.
+        Return recorded training accuracies.
 
         Returns
         -------
-        list
-            A list of float values representing the training accuracy for each 
-            batch.
+        list[float]
+            Training accuracies recorded for processed batches.
         """
         return self.train_acc_list
 
-    def set_model_state(self, state_dict):
+    def set_model_state(
+        self,
+        state_dict: dict[str, torch.Tensor],
+    ) -> None:
         """
-        Description
-        -----------
-        Updates the state of the model with the provided state dictionary. 
-        This method is used to load a saved model state or update 
-        the global model in a federated learning context.
-        Typically, this method can be used to synchronize clients with the global model.
+        Set the client model state.
+
+        Load the provided model state dictionary into the local model.
+        This can be used to synchronize the client with a global model.
 
         Parameters
         ----------
-        state_dict : dict
-            The state dictionary containing model parameters and buffers.
+        state_dict : dict[str, torch.Tensor]
+            Model state dictionary containing parameters and buffers.
 
         Raises
         ------
@@ -256,5 +289,9 @@ class OnlineClient(BaseInterface):
             If `state_dict` is not a dictionary.
         """
         if not isinstance(state_dict, dict):
-            raise TypeError(f"'state_dict' must be of type dict, but got {type(state_dict).__name__}")
+            raise TypeError(
+                "'state_dict' must be of type dict, "
+                f"but got {type(state_dict).__name__}"
+            )
+
         self.model.load_state_dict(state_dict)

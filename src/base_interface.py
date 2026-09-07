@@ -1,13 +1,27 @@
 import collections
-
-import torch
+from typing import Any, cast
 
 import byzfl.fed_framework.models as models
-from byzfl.utils.conversion import flatten_dict, unflatten_dict, unflatten_generator
+import torch
+from byzfl.utils.conversion import (
+    flatten_dict,
+    unflatten_dict,
+    unflatten_generator,
+)
 
-class BaseInterface(object):
 
-    def __init__(self, params):
+class BaseInterface:
+    """
+    Provide a common interface for federated learning clients and servers.
+
+    Parameters
+    ----------
+    params : dict[str, Any]
+        Configuration parameters used to initialize the model, device,
+        optimizer, and learning-rate scheduler.
+    """
+
+    def __init__(self, params: dict[str, Any]) -> None:
         # Input validation
         self._validate_params(params)
 
@@ -24,12 +38,15 @@ class BaseInterface(object):
 
         self.model.to(self.device)
 
-        # Initialize optimizer. If set to None, it means that the Client does not need this information 
+        # Initialize optimizer. If set to None, the client does not need
+        # this information.
         optimizer_name = params["optimizer_name"]
         if optimizer_name is not None:
             optimizer_class = getattr(torch.optim, optimizer_name, None)
             if optimizer_class is None:
-                raise ValueError(f"Optimizer '{optimizer_name}' is not supported by PyTorch.")
+                raise ValueError(
+                    f"Optimizer '{optimizer_name}' is not supported by PyTorch."
+                )
 
             self.optimizer = optimizer_class(
                 self.model.parameters(),
@@ -37,28 +54,40 @@ class BaseInterface(object):
                 weight_decay=params["weight_decay"],
             )
 
-            gamma=params["learning_rate_decay"]
+            gamma = params["learning_rate_decay"]
             self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                 self.optimizer,
-                lr_lambda=lambda t: (t + 1) ** (-gamma)
+                lr_lambda=lambda t: (t + 1) ** (-gamma),
             )
 
-
-    def _validate_params(self, params):
+    def _validate_params(self, params: dict[str, Any]) -> None:
         """
-        Validates the input parameters for correct types and values.
+        Validate the input parameters for correct types and values.
 
         Parameters
         ----------
-        params : dict
+        params : dict[str, Any]
             Dictionary of input parameters.
-        """
 
+        Raises
+        ------
+        KeyError
+            If a required parameter is missing.
+        TypeError
+            If ``model_name`` or ``device`` has an invalid type.
+        ValueError
+            If a numerical parameter has an invalid value.
+        """
         # Required keys for Server and Client
         required_keys = ["model_name", "device"]
         if params.get("isServer", False):
-            # Required keys for Server, Optional for client
-            required_keys += ["learning_rate", "weight_decay", "learning_rate_decay"]
+            # Required keys for Server, optional for Client
+            required_keys += [
+                "learning_rate",
+                "weight_decay",
+                "learning_rate_decay",
+            ]
+
         for key in required_keys:
             if key not in params:
                 raise KeyError(f"Missing required parameter: {key}")
@@ -66,97 +95,135 @@ class BaseInterface(object):
         # Validate types and ranges
         if not isinstance(params["model_name"], str):
             raise TypeError("Parameter 'model_name' must be a string.")
+
         if not isinstance(params["device"], str):
             raise TypeError("Parameter 'device' must be a string.")
-        if params["learning_rate"] is not None:
-            if not isinstance(params["learning_rate"], float) or params["learning_rate"] <= 0:
-                raise ValueError("Parameter 'learning_rate' must be a positive float.")
-        if params["weight_decay"] is not None:
-            if not isinstance(params["weight_decay"], float) or params["weight_decay"] < 0:
-                raise ValueError("Parameter 'weight_decay' must be a non-negative float.")
-        if params["learning_rate_decay"] is not None:
-            if not isinstance(params["learning_rate_decay"], float) or params["learning_rate_decay"] <= 0 or params["learning_rate_decay"] > 1.0:
-                raise ValueError("Parameter 'learning_rate_decay' must be a positive float smaller than 1.0.")
 
-    def get_flat_parameters(self):
+        if params["learning_rate"] is not None:
+            if (
+                not isinstance(params["learning_rate"], float)
+                or params["learning_rate"] <= 0
+            ):
+                raise ValueError("Parameter 'learning_rate' must be a positive float.")
+
+        if params["weight_decay"] is not None:
+            if (
+                not isinstance(params["weight_decay"], float)
+                or params["weight_decay"] < 0
+            ):
+                raise ValueError(
+                    "Parameter 'weight_decay' must be a non-negative float."
+                )
+
+        if params["learning_rate_decay"] is not None:
+            if (
+                not isinstance(params["learning_rate_decay"], float)
+                or params["learning_rate_decay"] <= 0
+                or params["learning_rate_decay"] > 1.0
+            ):
+                raise ValueError(
+                    "Parameter 'learning_rate_decay' must be a positive "
+                    "float smaller than or equal to 1.0."
+                )
+
+    def get_flat_parameters(self) -> torch.Tensor:
         """
-        Returns model parameters in a flat array.
+        Return model parameters as a flat tensor.
 
         Returns
         -------
-        list
-            Flat list of model parameters.
+        torch.Tensor
+            Flattened model parameters.
         """
         return flatten_dict(self.model.state_dict())
 
-    def get_flat_gradients(self):
+    def get_flat_gradients(self) -> torch.Tensor:
         """
-        Returns model gradients in a flat array.
+        Return model gradients as a flat tensor.
 
         Returns
         -------
-        list
-            Flat list of model gradients.
+        torch.Tensor
+            Flattened model gradients.
         """
         return flatten_dict(self.get_dict_gradients())
 
-    def get_dict_parameters(self):
+    def get_dict_parameters(self) -> dict[str, torch.Tensor]:
         """
-        Returns model parameters in a dictionary format.
+        Return model parameters in dictionary form.
 
         Returns
         -------
-        collections.OrderedDict
-            Dictionary of model parameters.
+        dict[str, torch.Tensor]
+            Dictionary containing the model parameters.
         """
-        return self.model.state_dict()
+        return cast(
+            dict[str, torch.Tensor],
+            self.model.state_dict(),
+        )
 
-    def get_dict_gradients(self):
+    def get_dict_gradients(
+        self,
+    ) -> collections.OrderedDict[str, torch.Tensor]:
         """
-        Returns model gradients in a dictionary format.
+        Return model gradients in dictionary form.
 
         Returns
         -------
-        collections.OrderedDict
-            Dictionary of model gradients.
+        collections.OrderedDict[str, torch.Tensor]
+            Ordered dictionary containing the model gradients.
         """
-        new_dict = collections.OrderedDict()
+        new_dict: collections.OrderedDict[str, torch.Tensor] = collections.OrderedDict()
+
         for key, value in self.model.named_parameters():
+            if value.grad is None:
+                raise RuntimeError(f"Gradient for parameter '{key}' is None.")
             new_dict[key] = value.grad
+
         return new_dict
 
-    def set_parameters(self, flat_vector):
+    def set_parameters(self, flat_vector: list[torch.Tensor]) -> None:
         """
-        Sets model parameters using a flat array.
+        Set model parameters from a flat tensor list.
 
         Parameters
         ----------
-        flat_vector : list
+        flat_vector : list[torch.Tensor]
             Flat list of parameters to set.
         """
-        new_dict = unflatten_dict(self.model.state_dict(), flat_vector)
+        new_dict = unflatten_dict(
+            self.model.state_dict(),
+            flat_vector,
+        )
         self.model.load_state_dict(new_dict)
 
-    def set_gradients(self, flat_vector):
+    def set_gradients(self, flat_vector: list[torch.Tensor]) -> None:
         """
-        Sets model gradients using a flat array.
+        Set model gradients from a flat tensor list.
 
         Parameters
         ----------
-        flat_vector : list
+        flat_vector : list[torch.Tensor]
             Flat list of gradients to set.
         """
-        new_dict = unflatten_generator(self.model.named_parameters(), flat_vector)
+        new_dict = unflatten_generator(
+            self.model.named_parameters(),
+            flat_vector,
+        )
+
         for key, value in self.model.named_parameters():
             value.grad = new_dict[key].clone().detach()
 
-    def set_model_state(self, state_dict):
+    def set_model_state(
+        self,
+        state_dict: dict[str, torch.Tensor],
+    ) -> None:
         """
-        Sets the state_dict of the model.
+        Set the model state dictionary.
 
         Parameters
         ----------
-        state_dict : dict
-            Dictionary containing model state.
+        state_dict : dict[str, torch.Tensor]
+            Dictionary containing the model state.
         """
         self.model.load_state_dict(state_dict)

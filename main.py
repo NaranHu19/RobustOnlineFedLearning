@@ -1,11 +1,12 @@
-import json
-from multiprocessing import Pool, Value
-import os
 import copy
+import json
+import os
+from multiprocessing import Pool, Value
+from multiprocessing.sharedctypes import Synchronized
+from typing import Any
 
-from benchmark.train import start_training
 from benchmark.evaluate_results import find_best_hyperparameters
-
+from benchmark.train import start_training
 
 default_config = {
     "benchmark_config": {
@@ -13,8 +14,8 @@ default_config = {
             "name": "RobustOnlineFL",
             "parameters": {
                 "aggreg_freq_scale": [1 + 1e-3, 1.5, 2, 2.5],
-                "aggreg_mult_scale": 1
-            }
+                "aggreg_mult_scale": 1,
+            },
         },
         "nb_steps": 800,
         "device": "cuda",
@@ -27,7 +28,7 @@ default_config = {
         "data_distribution": [
             {
                 "name": "gamma_similarity_niid",
-                "distribution_parameter": [1.0, 0.66, 0.33, 0.0]
+                "distribution_parameter": [1.0, 0.66, 0.33, 0.0],
             }
         ],
     },
@@ -39,37 +40,17 @@ default_config = {
         "learning_rate": 0.1,
         "learning_rate_decay": 1.0,
         "weight_decay": 0.1,
-        "milestones": []
+        "milestones": [],
     },
     "aggregator": [
-        {
-            "name": "GeometricMedian",
-            "parameters": {
-                "nu": 0.1,
-                "T": 3
-            }
-        },
-        {
-            "name": "TrMean",
-            "parameters": {}
-        }
+        {"name": "GeometricMedian", "parameters": {"nu": 0.1, "T": 3}},
+        {"name": "TrMean", "parameters": {}},
     ],
-    "honest_clients": {
-        "batch_size": 1
-    },
+    "honest_clients": {"batch_size": 1},
     "attack": [
-        {
-            "name": "SignFlipping",
-            "parameters": {}
-        },
-        {
-            "name": "Optimal_InnerProductManipulation",
-            "parameters": {}
-        },
-        {
-            "name": "Optimal_ALittleIsEnough",
-            "parameters": {}
-        }
+        {"name": "SignFlipping", "parameters": {}},
+        {"name": "Optimal_InnerProductManipulation", "parameters": {}},
+        {"name": "Optimal_ALittleIsEnough", "parameters": {}},
     ],
     "evaluation_and_results": {
         "evaluation_delta": 50,
@@ -79,120 +60,140 @@ default_config = {
         "store_models": True,
         "data_folder": "./data",
         "results_directory": "./results",
-        "models_directory": "./models"
-    }
+        "models_directory": "./models",
+    },
 }
 
-def generate_all_combinations_aux(list_dict, orig_dict, aux_dict, rest_list):
+
+def generate_all_combinations_aux(
+    list_dict: list[dict[str, Any]],
+    orig_dict: dict[str, Any],
+    aux_dict: dict[str, Any],
+    rest_list: list[str],
+) -> None:
     """
     Recursively builds all combinations of key-value pairs from a nested dictionary.
 
-    This helper function iterates over the keys in `orig_dict` and, depending on the type of the corresponding value,
+    This helper function iterates over the keys in `orig_dict` and,
+    depending on the type of the corresponding value,
     it recursively constructs combinations of values:
       - If a value is a list:
-          - When the list is empty or the key is in `rest_list` (and its first element is not a list),
-            the entire list is assigned to the key.
-          - Otherwise, the function iterates over each item in the list. If an item is a dictionary, the function
-            recursively generates combinations for that dictionary; if not, it treats the item as a single-element list.
-      - If a value is a dictionary, it recursively generates combinations for that sub-dictionary.
+          - When the list is empty or the key is in `rest_list`
+          (and its first element is not a list), the entire list is assigned to the key.
+          - Otherwise, the function iterates over each item in the list.
+          If an item is a dictionary, the function recursively generates combinations
+          for that dictionary; if not, it treats the item as a single-element list.
+      - If a value is a dictionary, it recursively generates combinations
+      for that sub-dictionary.
       - For other types, the value is directly assigned.
 
-    When the auxiliary dictionary `aux_dict` has entries for all keys in `orig_dict`, it is considered a complete
-    combination and is appended to `list_dict`.
+    When the auxiliary dictionary `aux_dict` has entries for all keys in `orig_dict`,
+    it is considered a complete combination and is appended to `list_dict`.
 
-    Parameters:
-        list_dict (list): A list that accumulates the resulting combinations. Each element is a dictionary representing
-            one combination.
-        orig_dict (dict): The original dictionary from which combinations are to be generated. Its values may be lists,
-            dictionaries, or atomic values.
-        aux_dict (dict): An auxiliary dictionary used to build up a single combination during the recursive process.
-        rest_list (list): A list of keys for which list values in `orig_dict` should be treated as atomic (i.e., not iterated
-            over), even if they contain list elements.
+    Parameters
+    ----------
+        list_dict: list[str]
+            A list that accumulates the resulting combinations.
+            Each element is a dictionary representing one combination.
+        orig_dict: dict[str, Any]
+            The original dictionary from which combinations are to be generated.
+            Its values may be lists, dictionaries, or atomic values.
+        aux_dict: dict[str, Any]
+            An auxiliary dictionary used to build up a single combination
+            during the recursive process.
+        rest_list: list[str]
+            A list of keys for which list values in `orig_dict` should be treated as
+            atomic (i.e., not iterated over), even if they contain list elements.
 
-    Returns:
-        None: The function appends complete combinations to `list_dict` as a side effect.
+    Returns
+    -------
+        None
+            The function appends complete combinations to `list_dict` as a side effect.
     """
     if len(aux_dict) < len(orig_dict):
         key = list(orig_dict)[len(aux_dict)]
         if isinstance(orig_dict[key], list):
-            if not orig_dict[key] or (key in rest_list and 
-                not isinstance(orig_dict[key][0], list)):
+            if not orig_dict[key] or (
+                key in rest_list and not isinstance(orig_dict[key][0], list)
+            ):
                 aux_dict[key] = orig_dict[key]
-                generate_all_combinations_aux(list_dict, 
-                                              orig_dict, 
-                                              aux_dict, 
-                                              rest_list)
+                generate_all_combinations_aux(list_dict, orig_dict, aux_dict, rest_list)
             else:
                 for item in orig_dict[key]:
                     if isinstance(item, dict):
-                        new_list_dict = []
-                        new_aux_dict = {}
-                        generate_all_combinations_aux(new_list_dict, 
-                                                    item, 
-                                                    new_aux_dict, 
-                                                    rest_list)
+                        new_list_dict: list[dict[str, Any]] = []
+                        new_aux_dict: dict[str, Any] = {}
+                        generate_all_combinations_aux(
+                            new_list_dict, item, new_aux_dict, rest_list
+                        )
                     else:
                         new_list_dict = [item]
                     for new_dict in new_list_dict:
                         new_aux_dict = copy.deepcopy(aux_dict)
                         new_aux_dict[key] = new_dict
 
-                        generate_all_combinations_aux(list_dict,
-                                                    orig_dict, 
-                                                    new_aux_dict, 
-                                                    rest_list)
+                        generate_all_combinations_aux(
+                            list_dict, orig_dict, new_aux_dict, rest_list
+                        )
         elif isinstance(orig_dict[key], dict):
             new_list_dict = []
             new_aux_dict = {}
-            generate_all_combinations_aux(new_list_dict, 
-                                          orig_dict[key], 
-                                          new_aux_dict, 
-                                          rest_list)
+            generate_all_combinations_aux(
+                new_list_dict, orig_dict[key], new_aux_dict, rest_list
+            )
             for dictionary in new_list_dict:
                 new_aux_dict = aux_dict.copy()
                 new_aux_dict[key] = dictionary
-                generate_all_combinations_aux(list_dict, 
-                                              orig_dict, 
-                                              new_aux_dict, 
-                                              rest_list)
+                generate_all_combinations_aux(
+                    list_dict, orig_dict, new_aux_dict, rest_list
+                )
         else:
             aux_dict[key] = orig_dict[key]
-            generate_all_combinations_aux(list_dict, 
-                                          orig_dict, 
-                                          aux_dict, 
-                                          rest_list)
+            generate_all_combinations_aux(list_dict, orig_dict, aux_dict, rest_list)
     else:
         list_dict.append(aux_dict)
 
-def generate_all_combinations(original_dict, restriction_list):
+
+def generate_all_combinations(
+    original_dict: dict[str, Any],
+    restriction_list: list[str],
+) -> list[dict[str, Any]]:
     """
-    Generates all possible combinations from a nested dictionary structure.
+    Generate all possible combinations from a nested dictionary structure.
 
-    This function acts as the entry point for generating combinations from `original_dict`. It handles
-    nested structures where values can be lists or dictionaries, and uses the helper function
-    `generate_all_combinations_aux` to recursively construct every possible combination of key-value pairs.
-    For keys specified in `restriction_list`, list values are treated as atomic (i.e., the list is not iterated
-    over) and is directly assigned as the value.
+    This function acts as the entry point for generating combinations
+    from `original_dict`. It handles nested structures where values can be lists
+    or dictionaries, and uses the helper function `generate_all_combinations_aux`
+    to recursively construct every possible combination of key-value pairs.
+    For keys specified in `restriction_list`, list values are treated as
+    atomic (i.e., the list is not iterated over) and is directly assigned as the value.
 
-    Parameters:
-        original_dict (dict): The dictionary from which to generate combinations. Its values may include lists,
-            nested dictionaries, or simple values.
-        restriction_list (list): A list of keys whose list values should be treated as atomic, meaning the list
-            is used as is without iterating over its items.
+    Parameters
+    ----------
+        original_dict: dict[str, Any]
+            The dictionary from which to generate combinations.
+            Its values may include lists, nested dictionaries, or simple values.
+        restriction_list: list[str]
+            A list of keys whose list values should be treated as atomic,
+            meaning the list is used as is without iterating over its items.
 
-    Returns:
-        list: A list of dictionaries. Each dictionary represents one complete combination of key-value pairs
-            generated from `original_dict`.
+    Returns
+    -------
+        list[dict[str, Any]]
+            A list of dictionaries. Each dictionary represents one complete combination
+            of key-value pairs generated from `original_dict`.
     """
-    list_dict = []
-    aux_dict = {}
+    list_dict: list[dict[str, Any]] = []
+    aux_dict: dict[str, Any] = {}
     generate_all_combinations_aux(list_dict, original_dict, aux_dict, restriction_list)
     return list_dict
 
-# Global variable to keep track of training progress
-counter = None
 
-def init_pool_processes(shared_value):
+# Global variable to keep track of training progress
+counter: Synchronized[int] | None = None
+
+
+def init_pool_processes(shared_value: Synchronized[int]) -> None:
     """
     Initialize a global counter variable for multiprocess tracking.
 
@@ -205,7 +206,7 @@ def init_pool_processes(shared_value):
     counter = shared_value
 
 
-def run_training(params):
+def run_training(params: dict[str, Any]) -> None:
     """
     Run a single training job, then increment the global training counter.
 
@@ -215,22 +216,27 @@ def run_training(params):
         A dictionary containing all necessary parameters for the training job.
     """
     start_training(params)
+
+    if counter is None:
+        raise RuntimeError("Training counter has not been initialized")
+
     with counter.get_lock():
         print(f"Training {counter.value} done")
         counter.value += 1
 
-def eliminate_experiments_done(dict_list):
+
+def eliminate_experiments_done(dict_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Remove any configurations (experiments) that have already been completed.
 
     Parameters
     ----------
-    dict_list : list of dict
+    dict_list: list[dict[str, Any]]
         A list of configuration dictionaries for each experiment.
 
     Returns
     -------
-    list of dict
+    list[dict[str, Any]]
         The filtered list of configurations for which experiments are not yet done.
     """
     if not dict_list:
@@ -241,7 +247,8 @@ def eliminate_experiments_done(dict_list):
         return dict_list
 
     folders = [
-        name for name in os.listdir(directory)
+        name
+        for name in os.listdir(directory)
         if os.path.isdir(os.path.join(directory, name))
     ]
 
@@ -251,32 +258,36 @@ def eliminate_experiments_done(dict_list):
 
     new_dict_list = []
     for setting in dict_list:
+        benchmark_config = setting["benchmark_config"]
+        model_config = setting["model"]
+        training_parameters = benchmark_config["training_algorithm"]["parameters"]
 
-        pre_aggregation_names = [
-            agg['name'] for agg in setting["pre_aggregators"]
-        ]
+        pre_aggregation_names = [agg["name"] for agg in setting["pre_aggregators"]]
+
         folder_name = (
-            f"{setting['model']['dataset_name']}_"
-            f"{setting['model']['name']}_"
-            f"n_{setting['benchmark_config']['nb_clients']}_"
-            f"f_{setting['benchmark_config']['f']}_"
-            f"d_{setting['benchmark_config']['tolerated_f']}_"
-            f"{setting['benchmark_config']['data_distribution']['name']}_"
-            f"{setting['benchmark_config']['data_distribution']['distribution_parameter']}_"
+            f"{model_config['dataset_name']}_"
+            f"{model_config['name']}_"
+            f"n_{benchmark_config['nb_clients']}_"
+            f"f_{benchmark_config['f']}_"
+            f"d_{benchmark_config['tolerated_f']}_"
+            f"{benchmark_config['data_distribution']['name']}_"
+            f"{benchmark_config['data_distribution']['distribution_parameter']}_"
             f"{setting['aggregator']['name']}_"
             f"{'_'.join(pre_aggregation_names)}_"
             f"{setting['attack']['name']}_"
-            f"lr_{setting['model']['learning_rate']}_"
-            f"lrd_{setting['model']['learning_rate_decay']}_"
-            f"wd_{setting['model']['weight_decay']}_"
-            f"af_{setting['benchmark_config']['training_algorithm']['parameters']['aggreg_freq_scale']}_"
-            f"am_{setting['benchmark_config']['training_algorithm']['parameters']['aggreg_mult_scale']}"
+            f"lr_{model_config['learning_rate']}_"
+            f"lrd_{model_config['learning_rate_decay']}_"
+            f"wd_{model_config['weight_decay']}_"
+            f"af_{training_parameters['aggreg_freq_scale']}_"
+            f"am_{training_parameters['aggreg_mult_scale']}"
         )
 
         if folder_name in folders:
             # Check if a particular seed combination is already done
             training_seed = setting["benchmark_config"]["training_seed"]
-            data_distribution_seed = setting["benchmark_config"]["data_distribution_seed"]
+            data_distribution_seed = setting["benchmark_config"][
+                "data_distribution_seed"
+            ]
 
             file_name = (
                 f"train_time_tr_seed_{training_seed}"
@@ -290,18 +301,18 @@ def eliminate_experiments_done(dict_list):
     return new_dict_list
 
 
-def delegate_training_seeds(dict_list):
+def delegate_training_seeds(dict_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    For each configuration, generate new configurations for each specified training seed.
+    Generate configurations for all training seeds.
 
     Parameters
     ----------
-    dict_list : list of dict
+    dict_list : list[dict[str, Any]]
         A list of configuration dictionaries (each containing a base training_seed).
 
     Returns
     -------
-    list of dict
+    list[dict[str, Any]]
         A new list of configurations, each with a unique training_seed.
     """
     new_dict_list = []
@@ -315,18 +326,21 @@ def delegate_training_seeds(dict_list):
     return new_dict_list
 
 
-def delegate_data_distribution_seeds(dict_list):
+def delegate_data_distribution_seeds(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
-    For each configuration, generate new configurations for each specified data distribution seed.
+    Generate configurations for all training seeds.
 
     Parameters
     ----------
-    dict_list : list of dict
-        A list of configuration dictionaries (each containing a base data_distribution_seed).
+    dict_list : list[dict[str, Any]]
+        A list of configuration dictionaries
+        (each containing a base data_distribution_seed).
 
     Returns
     -------
-    list of dict
+    list[dict[str, Any]]
         A new list of configurations, each with a unique data_distribution_seed.
     """
     new_dict_list = []
@@ -335,25 +349,31 @@ def delegate_data_distribution_seeds(dict_list):
         nb_seeds = setting["benchmark_config"]["nb_data_distribution_seeds"]
         for i in range(nb_seeds):
             new_setting = copy.deepcopy(setting)
-            new_setting["benchmark_config"]["data_distribution_seed"] = original_seed + i
+            new_setting["benchmark_config"]["data_distribution_seed"] = (
+                original_seed + i
+            )
             new_dict_list.append(new_setting)
     return new_dict_list
 
 
-def remove_real_greater_declared(dict_list):
+def remove_real_greater_declared(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
-    Filter out configurations where the real number of Byzantine workers
-    exceeds the declared number.
+    Remove configurations with too many Byzantine clients.
+
+    Keep only configurations for which the tolerated number of
+    Byzantine clients is greater than or equal to the real number.
 
     Parameters
     ----------
-    dict_list : list of dict
-        A list of configuration dictionaries.
+    dict_list : list[dict[str, Any]]
+        Experiment configurations.
 
     Returns
     -------
-    list of dict
-        The filtered list where tolerated_f >= f.
+    list[dict[str, Any]]
+        Valid experiment configurations.
     """
     new_dict_list = []
     for setting in dict_list:
@@ -364,18 +384,20 @@ def remove_real_greater_declared(dict_list):
     return new_dict_list
 
 
-def set_tolerated_f_equal_to_real_f(dict_list):
+def set_tolerated_f_equal_to_real_f(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Set the 'tolerated_f' parameter equal to 'f' for each configuration.
 
     Parameters
     ----------
-    dict_list : list of dict
+    dict_list : list[dict[str, Any]]
         A list of configuration dictionaries.
 
     Returns
     -------
-    list of dict
+    list[dict[str, Any]]
         The modified list with 'tolerated_f' set to 'f'.
     """
     new_dict_list = []
@@ -384,42 +406,88 @@ def set_tolerated_f_equal_to_real_f(dict_list):
         new_dict_list.append(setting)
     return new_dict_list
 
-def set_declared_as_aggregation_parameter(dict_list):
+
+def set_declared_as_aggregation_parameter(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
-    For each configuration, set the aggregator and preaggregator parameter 'f' to the declared number of Byzantine workers.
+    Set the declared Byzantine count in aggregation parameters.
+
+    Assign ``tolerated_f`` to the ``f`` parameter of the aggregator
+    and every pre-aggregator.
 
     Parameters
     ----------
-    dict_list : list of dict
-        A list of configuration dictionaries.
+    dict_list : list[dict[str, Any]]
+        Experiment configurations.
 
     Returns
     -------
-    list of dict
-        The modified list with aggregator parameters updated.
+    list[dict[str, Any]]
+        Updated experiment configurations.
     """
     for setting in dict_list:
         declared_byz = setting["benchmark_config"]["tolerated_f"]
         setting["aggregator"]["parameters"]["f"] = declared_byz
 
         for pre_agg in setting["pre_aggregators"]:
-                pre_agg["parameters"]["f"] = declared_byz
+            pre_agg["parameters"]["f"] = declared_byz
 
     return dict_list
 
-def compute_number_of_workers(dict_list):
-    for setting in dict_list:
-        setting["benchmark_config"]["nb_honest_clients"] = (
-            setting["benchmark_config"]["nb_clients"]
-            - setting["benchmark_config"]["f"]
-        )
-    return dict_list
 
-def ensure_key_parameters(dict_list):
+def compute_number_of_workers(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
-    Ensures that each dictionary in dict_list contains a "parameters" key within 
-    "aggregator", "pre_aggregators", and "attack" dictionaries. If the "parameters" 
-    key is missing, it is initialized as an empty dictionary.
+    Compute the number of honest clients.
+
+    Subtract the number of Byzantine clients from the total number
+    of clients for every configuration.
+
+    Parameters
+    ----------
+    dict_list : list[dict[str, Any]]
+        Experiment configurations.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Configurations containing the number of honest clients.
+    """
+    for setting in dict_list:
+        benchmark_config = setting["benchmark_config"]
+        benchmark_config["nb_honest_clients"] = (
+            benchmark_config["nb_clients"] - benchmark_config["f"]
+        )
+
+    return dict_list
+
+
+def ensure_key_parameters(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Ensure that required parameter dictionaries exist.
+
+    Add missing ``parameters`` dictionaries for aggregators, attacks,
+    pre-aggregators, and the training algorithm. Validate the required
+    RobustOnlineFL parameters.
+
+    Parameters
+    ----------
+    dict_list : list[dict[str, Any]]
+        Experiment configurations to validate.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Validated experiment configurations.
+
+    Raises
+    ------
+    ValueError
+        If required RobustOnlineFL parameters are missing or invalid.
     """
     for setting in dict_list:
         if "parameters" not in setting["aggregator"].keys():
@@ -438,78 +506,124 @@ def ensure_key_parameters(dict_list):
         if "training_algorithm" not in setting["benchmark_config"].keys():
             setting["benchmark_config"]["training_algorithm"] = {
                 "name": "RobustOnlineFL",
-                "parameters": {}
+                "parameters": {},
             }
 
-        if setting["benchmark_config"]["training_algorithm"]["name"] == "RobustOnlineFL":
-            ta_params =  setting["benchmark_config"]["training_algorithm"].get("parameters", {})
+        if (
+            setting["benchmark_config"]["training_algorithm"]["name"]
+            == "RobustOnlineFL"
+        ):
+            ta_params = setting["benchmark_config"]["training_algorithm"].get(
+                "parameters", {}
+            )
 
             # Check for 'aggreg_freq_scale'
             if "aggreg_freq_scale" not in ta_params:
-                raise ValueError("Missing 'proportion_selected_clients' in training algorithm parameters for RobustOnlineFL")
+                raise ValueError(
+                    "Missing 'aggreg_freq_scale' in training algorithm "
+                    "parameters for RobustOnlineFL"
+                )
 
             aggreg_freq_scale = ta_params["aggreg_freq_scale"]
             if aggreg_freq_scale < 1:
-                raise ValueError(f"Aggregation frequency scaling must be greater than or equal to 1 , but got {aggreg_freq_scale}")
+                raise ValueError(
+                    "Aggregation frequency scaling must be greater than "
+                    f"or equal to 1 , but got {aggreg_freq_scale}"
+                )
 
             # Check for 'local_steps_per_client'
             if "aggreg_mult_scale" not in ta_params:
-                raise ValueError("Missing 'aggreg_mult_scale' in training algorithm parameters for RobustOnlineFL")
+                raise ValueError(
+                    "Missing 'aggreg_mult_scale' in training algorithm "
+                    "parameters for RobustOnlineFL"
+                )
 
             aggreg_mult_scale = ta_params["aggreg_mult_scale"]
             if aggreg_mult_scale <= 0:
-                raise ValueError(f"Aggregation multiplicative scaling parameter must be positive, but got {aggreg_mult_scale}")
+                raise ValueError(
+                    "Aggregation multiplicative scaling parameter must be positive, "
+                    "but got {aggreg_mult_scale}"
+                )
 
     return dict_list
 
 
-def ensure_optional_config_parameters(data):
+def ensure_optional_config_parameters(
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Add default values for optional configuration parameters.
 
-    if "nb_clients" not in data["benchmark_config"].keys():
-        data["benchmark_config"]["nb_clients"] = 10
+    Parameters
+    ----------
+    data : dict[str, Any]
+        Benchmark configuration dictionary.
 
-    if "training_seed" not in data["benchmark_config"].keys():
-        data["benchmark_config"]["training_seed"] = 0
+    Returns
+    -------
+    dict[str, Any]
+        Configuration dictionary containing default optional values.
+    """
+    benchmark_config = data["benchmark_config"]
+    evaluation_config = data["evaluation_and_results"]
 
-    if "nb_training_seeds" not in data["benchmark_config"].keys():
-        data["benchmark_config"]["nb_training_seeds"] = 1
+    if "nb_clients" not in benchmark_config:
+        benchmark_config["nb_clients"] = 10
 
-    if "data_distribution_seed" not in data["benchmark_config"].keys():
-        data["benchmark_config"]["data_distribution_seed"] = 0
+    if "training_seed" not in benchmark_config:
+        benchmark_config["training_seed"] = 0
 
-    if "nb_data_distribution_seeds" not in data["benchmark_config"].keys():
-        data["benchmark_config"]["nb_data_distribution_seeds"] = 1
+    if "nb_training_seeds" not in benchmark_config:
+        benchmark_config["nb_training_seeds"] = 1
 
-    if "results_directory" not in data["evaluation_and_results"].keys():
-        data["evaluation_and_results"]["results_directory"] = "./results"
+    if "data_distribution_seed" not in benchmark_config:
+        benchmark_config["data_distribution_seed"] = 0
 
-    if "models_directory" not in data["evaluation_and_results"].keys():
-        data["evaluation_and_results"]["models_directory"] = "./models"
+    if "nb_data_distribution_seeds" not in benchmark_config:
+        benchmark_config["nb_data_distribution_seeds"] = 1
 
-    if "size_train_set" not in data["benchmark_config"].keys():
-        data["benchmark_config"]["size_train_set"] = 0.8
+    if "results_directory" not in evaluation_config:
+        evaluation_config["results_directory"] = "./results"
+
+    if "models_directory" not in evaluation_config:
+        evaluation_config["models_directory"] = "./models"
+
+    if "size_train_set" not in benchmark_config:
+        benchmark_config["size_train_set"] = 0.8
 
     return data
 
 
-def run_benchmark(nb_jobs=1):
+def run_benchmark(nb_jobs: int = 1) -> None:
     """
-    Run benchmark experiments in parallel, based on configurations defined
-    in 'config.json'.
+    Run the configured benchmark experiments.
+
+    Load the benchmark configuration, generate all experiment
+    combinations, run unfinished experiments in parallel, and select
+    the best hyperparameters when validation data is available.
+
+    Parameters
+    ----------
+    nb_jobs : int, optional
+        Number of training experiments to run in parallel.
     """
     # Attempt to load config.json or create one if not found
     try:
-        with open('config/config.json', 'r') as file:
+        with open("config/config.json") as file:
             data = json.load(file)
 
         data = ensure_optional_config_parameters(data)
         if float(data["benchmark_config"]["size_train_set"]) == 1.0:
-            print("WARNING: NO VALIDATION DATASET USED FOR HYPERPARAMETER EXPLORATION (Learning Rate, Momentum, Weight Decay)")
+            print(
+                "WARNING: NO VALIDATION DATASET USED FOR "
+                "HYPERPARAMETER EXPLORATION "
+                "(Learning Rate, Momentum, Weight Decay)"
+            )
 
     except FileNotFoundError:
         print("'config/config.json' not found. Creating a default one...")
 
-        with open('config/config.json', 'w') as f:
+        with open("config/config.json", "w") as f:
             json.dump(default_config, f, indent=4)
 
         print("'config/config.json' created successfully.")
@@ -523,8 +637,8 @@ def run_benchmark(nb_jobs=1):
 
     # Save the current config inside the results directory
     config_path = os.path.join(results_directory, "config.json")
-    with open(config_path, 'w') as json_file:
-        json.dump(data, json_file, indent=4, separators=(',', ': '))
+    with open(config_path, "w") as json_file:
+        json.dump(data, json_file, indent=4, separators=(",", ": "))
 
     # Generate all combination dictionaries
     restriction_list = ["pre_aggregators", "milestones"]
@@ -556,8 +670,13 @@ def run_benchmark(nb_jobs=1):
     print(f"Total trainings to do: {len(dict_list)}")
     print(f"Running {nb_jobs} trainings in parallel...")
 
-    counter = Value('i', 0)
-    with Pool(initializer=init_pool_processes, initargs=(counter,), processes=nb_jobs) as pool:
+    shared_counter = Value("i", 0)
+
+    with Pool(
+        initializer=init_pool_processes,
+        initargs=(shared_counter,),
+        processes=nb_jobs,
+    ) as pool:
         pool.map(run_training, dict_list)
 
     print("All trainings finished.")

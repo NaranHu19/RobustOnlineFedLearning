@@ -31,7 +31,7 @@ def k_schedule(
     schedule: list[int] = []
 
     while next_time < nb_tot_update:
-        next_time = math.ceil(aggreg_mult_scale*step**aggreg_freq_scale)
+        next_time = math.ceil(aggreg_mult_scale * step**aggreg_freq_scale)
 
         if next_time >= nb_tot_update:
             break
