@@ -101,6 +101,7 @@ def start_training(params: dict[str, Any]) -> None:
     nb_clients = params_manager.get_nb_clients()
     nb_byz_clients = params_manager.get_f()
     nb_training_steps = params_manager.get_nb_steps()
+    batch_size = params_manager.get_honest_clients_batch_size()
 
     dd_seed = params_manager.get_data_distribution_seed()
     training_seed = params_manager.get_training_seed()
@@ -154,7 +155,7 @@ def start_training(params: dict[str, Any]) -> None:
             "distribution_parameter": params_manager.get_parameter_data_distribution(),
             "nb_honest": nb_clients,
             "data_loader": train_dataset,
-            "batch_size": 1,
+            "batch_size": batch_size,
         }
     )
     client_dataloaders = data_distributor.split_data()
