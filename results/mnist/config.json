@@ -53,6 +53,12 @@
             "parameters": {}
         }
     ],
+    "pre_aggregators": [
+        {
+            "name": "NNM",
+            "parameters": {}
+        }
+    ],
     "honest_clients": {
         "batch_size": 1
     },
