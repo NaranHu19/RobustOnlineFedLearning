@@ -7,7 +7,6 @@ from multiprocessing import get_context
 from multiprocessing.sharedctypes import Synchronized
 from typing import Any
 
-from benchmark.evaluate_results import find_best_hyperparameters
 from benchmark.train import start_training
 
 default_config = {
@@ -730,6 +729,8 @@ def run_benchmark(
         print("No hyperparameter exploration done.")
     else:
         print("Selecting Best Hyperparameters...")
+
+        from benchmark.evaluate_results import find_best_hyperparameters
 
         find_best_hyperparameters(results_directory)
 
