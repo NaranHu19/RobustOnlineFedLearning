@@ -10,9 +10,9 @@
         "nb_steps": 5000,
         "device": "cuda",
         "training_seed": 0,
-        "nb_training_seeds": 3,
+        "nb_training_seeds": 5,
         "nb_clients": 10,
-        "f": 3,
+        "f": 4,
         "data_distribution_seed": 0,
         "nb_data_distribution_seeds": 1,
         "data_distribution": [
@@ -60,7 +60,7 @@
         }
     ],
     "honest_clients": {
-        "batch_size": 1
+        "batch_size": 32
     },
     "attack": [
         {
