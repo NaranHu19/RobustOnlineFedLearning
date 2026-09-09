@@ -59,7 +59,10 @@ class OnlineClient(ModelBaseInterface):  # type: ignore[misc]
                 # Optional parameters
                 "learning_rate": params.get("learning_rate", None),
                 "weight_decay": params.get("weight_decay", None),
+                "milestones": params.get("milestones", None),
+                "learning_rate_decay": params.get("learning_rate_decay", None),
                 "optimizer_name": params.get("optimizer_name", None),
+                "optimizer_params": params.get("optimizer_params", {}),
             }
         )
 
