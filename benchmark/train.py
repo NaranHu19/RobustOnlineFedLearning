@@ -170,7 +170,7 @@ def start_training(params: dict[str, Any]) -> None:
         )
 
     # Initialize Honest Clients
-    honest_clients = [
+    clients = [
         OnlineClient(
             {
                 "model_name": params_manager.get_model_name(),
@@ -234,7 +234,6 @@ def start_training(params: dict[str, Any]) -> None:
 
     val_accuracy_list = np.array([])
     test_accuracy_list = np.array([])
-    train_loss_list = np.zeros(nb_training_steps)
 
     start_time = time.time()
 
@@ -253,14 +252,45 @@ def start_training(params: dict[str, Any]) -> None:
 
     aggreg_freq_scale = training_algorithm_parameters["aggreg_freq_scale"]
     aggreg_mult_scale = training_algorithm_parameters["aggreg_mult_scale"]
-    aggreg_times = k_schedule(nb_training_steps, aggreg_freq_scale, aggreg_mult_scale)
+
+    aggreg_times = np.asarray(
+        k_schedule(
+            nb_training_steps,
+            aggreg_freq_scale,
+            aggreg_mult_scale,
+        ),
+        dtype=int,
+    )
+
     local_updates = np.diff(aggreg_times)
-    k = 0
+    nb_aggregation_rounds = len(local_updates)
+    train_loss_list = np.zeros(nb_aggregation_rounds)
+    byz_history = np.zeros(
+        (nb_aggregation_rounds, nb_clients),
+        dtype=bool,
+    )
+
+    if len(aggreg_times) < 2:
+        raise ValueError(
+            "Aggregation schedule must contain at least t_0 and one "
+            "aggregation time."
+        )
+
+    if aggreg_times[0] != 0:
+        raise ValueError("Aggregation schedule must start at t_0 = 0.")
+
+    if aggreg_times[-1] != nb_training_steps:
+        raise ValueError("The final aggregation time must equal nb_training_steps.")
+
+    if np.any(local_updates <= 0):
+        raise ValueError("Aggregation times must be strictly increasing.")
 
     # Training Loop
-    for training_step in range(nb_training_steps):
+    for k, num_local_updates in enumerate(local_updates):
+        t_start = int(aggreg_times[k])
+
         # Evaluate Global Model Every Evaluation Delta Steps
-        if training_step % evaluation_delta == 0:
+        if k % evaluation_delta == 0:
             if val_loader is not None:
                 val_acc = server.compute_validation_accuracy()
 
@@ -290,37 +320,53 @@ def start_training(params: dict[str, Any]) -> None:
 
             if store_models:
                 file_manager.save_state_dict(
-                    server.get_dict_parameters(), training_seed, dd_seed, training_step
+                    server.get_dict_parameters(), training_seed, dd_seed, t_start
                 )
 
-        # Send Updated Model to Clients
         new_model = server.get_dict_parameters()
-        for client in honest_clients:
+        for client in clients:
             client.set_model_state(new_model)
 
         idx_selected_byz_clients = np.random.choice(
-            nb_clients, size=nb_byz_clients, replace=False
+            nb_clients,
+            size=nb_byz_clients,
+            replace=False,
         )
 
         byz_idx = set(idx_selected_byz_clients)
+        byz_history[k, idx_selected_byz_clients] = True
 
         train_loss_per_client = []
         honest_weights = []
 
-        for i in range(nb_clients):
-            loss = honest_clients[i].compute_model_update(local_updates[k])
+        client_weights = [None] * nb_clients
 
-            if i not in byz_idx:
-                train_loss_per_client.append(loss)
-                honest_weights.append(honest_clients[i].get_flat_parameters())
+        for i, client in enumerate(clients):
+            if i in byz_idx:
+                continue
 
-        train_loss_list[training_step] = np.mean(train_loss_per_client)
+            loss = client.compute_model_update(
+                num_rounds=int(num_local_updates),
+                start_time=t_start,
+            )
+
+            honest_weight = client.get_flat_parameters()
+
+            train_loss_per_client.append(loss)
+            honest_weights.append(honest_weight)
+            client_weights[i] = honest_weight
+
+        train_loss_list[k] = np.mean(train_loss_per_client)
 
         byz_weights = byz_client.apply_attack(honest_weights)
 
-        weights = honest_weights + byz_weights
+        for client_idx, malicious_weight in zip(
+            idx_selected_byz_clients,
+            byz_weights,
+        ):
+            client_weights[client_idx] = malicious_weight
 
-        server.update_model_with_weights(weights)
+        server.update_model_with_weights(client_weights)
 
     end_time = time.time()
 
@@ -361,7 +407,7 @@ def start_training(params: dict[str, Any]) -> None:
         )
 
     if store_per_client_metrics:
-        for client_id, client in enumerate(honest_clients):
+        for client_id, client in enumerate(clients):
             client_loss = client.get_loss_list()
             acc = client.get_train_accuracy()
 
@@ -371,7 +417,7 @@ def start_training(params: dict[str, Any]) -> None:
 
     if store_models:
         file_manager.save_state_dict(
-            server.get_dict_parameters(), training_seed, dd_seed, training_step
+            server.get_dict_parameters(), training_seed, dd_seed, int(aggreg_times[-1])
         )
 
     execution_time = end_time - start_time

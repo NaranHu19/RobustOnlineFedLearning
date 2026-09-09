@@ -3,12 +3,11 @@ from typing import Any, cast
 
 import numpy as np
 import torch
+from byzfl.fed_framework import ModelBaseInterface
 from byzfl.utils.conversion import flatten_dict
 
-from src.base_interface import BaseInterface
 
-
-class OnlineClient(BaseInterface):
+class OnlineClient(ModelBaseInterface):  # type: ignore[misc]
     """
     Represent a client performing local online federated learning.
 
@@ -59,14 +58,13 @@ class OnlineClient(BaseInterface):
                 "device": params["device"],
                 # Optional parameters
                 "learning_rate": params.get("learning_rate", None),
-                "learning_rate_decay": params.get(
-                    "learning_rate_decay",
-                    None,
-                ),
                 "weight_decay": params.get("weight_decay", None),
                 "optimizer_name": params.get("optimizer_name", None),
             }
         )
+
+        self.initial_learning_rate = params["learning_rate"]
+        self.learning_rate_decay = params["learning_rate_decay"]
 
         self.criterion = getattr(torch.nn, params["loss_name"])()
         self.gradient_LF = torch.Tensor([0])
@@ -189,7 +187,7 @@ class OnlineClient(BaseInterface):
 
         return float(loss_value)
 
-    def compute_model_update(self, num_rounds: int) -> float:
+    def compute_model_update(self, num_rounds: int, start_time: int) -> float:
         """
         Perform multiple local model update rounds.
 
@@ -199,7 +197,9 @@ class OnlineClient(BaseInterface):
         Parameters
         ----------
         num_rounds : int
-            Number of local training iterations to perform.
+            Number of local updates to perform during the interval.
+        start_time : int
+            Global local-update time t_k at the beginning of the interval.
 
         Returns
         -------
@@ -209,6 +209,15 @@ class OnlineClient(BaseInterface):
         losses = np.zeros(num_rounds)
 
         for i in range(num_rounds):
+            t = start_time + i
+
+            learning_rate = self.initial_learning_rate * (
+                (t + 1) ** (-self.learning_rate_decay)
+            )
+
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = learning_rate
+
             inputs, targets = self._sample_train_batch()
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
@@ -224,7 +233,6 @@ class OnlineClient(BaseInterface):
             losses[i] = train_loss_value
 
             self.optimizer.step()
-            self.scheduler.step()
 
             if self.store_per_client_metrics:
                 self.loss_list.append(train_loss_value)
