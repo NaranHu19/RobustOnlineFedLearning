@@ -2,10 +2,7 @@ import argparse
 
 from benchmark.benchmark import run_benchmark
 from benchmark.evaluate_results import (
-    aggregated_test_heatmap,
-    loss_heatmap,
     test_accuracy_curve,
-    test_heatmap,
 )
 
 
@@ -42,9 +39,6 @@ def run_plotting(dataset: str) -> None:
     path_to_plot = f"./plot/{dataset}"
 
     test_accuracy_curve(path_training_results, path_to_plot)
-    loss_heatmap(path_training_results, path_to_plot)
-    test_heatmap(path_training_results, path_to_plot)
-    aggregated_test_heatmap(path_training_results, path_to_plot)
 
 
 def build_parser() -> argparse.ArgumentParser:

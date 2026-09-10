@@ -13,7 +13,6 @@ dependencies = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "D"]
@@ -27,7 +26,7 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 disallow_untyped_defs = true
 warn_unused_ignores = true
 strict = true
