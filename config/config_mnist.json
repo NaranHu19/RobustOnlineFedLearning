@@ -39,8 +39,8 @@
         {
             "name": "GeometricMedian",
             "parameters": {
-                "nu": 0.1,
-                "T": 3
+                "nu": 0.0,
+                "T": 100
             }
         },
         {
