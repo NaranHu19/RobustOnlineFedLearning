@@ -5,6 +5,7 @@ import json
 import os
 from multiprocessing import get_context
 from multiprocessing.sharedctypes import Synchronized
+from pathlib import Path
 from typing import Any
 
 from benchmark.train import start_training
@@ -129,28 +130,43 @@ def generate_all_combinations_aux(
                         )
                     else:
                         new_list_dict = [item]
+
                     for new_dict in new_list_dict:
                         new_aux_dict = copy.deepcopy(aux_dict)
                         new_aux_dict[key] = new_dict
 
                         generate_all_combinations_aux(
-                            list_dict, orig_dict, new_aux_dict, rest_list
+                            list_dict,
+                            orig_dict,
+                            new_aux_dict,
+                            rest_list,
                         )
         elif isinstance(orig_dict[key], dict):
             new_list_dict = []
             new_aux_dict = {}
             generate_all_combinations_aux(
-                new_list_dict, orig_dict[key], new_aux_dict, rest_list
+                new_list_dict,
+                orig_dict[key],
+                new_aux_dict,
+                rest_list,
             )
             for dictionary in new_list_dict:
                 new_aux_dict = aux_dict.copy()
                 new_aux_dict[key] = dictionary
                 generate_all_combinations_aux(
-                    list_dict, orig_dict, new_aux_dict, rest_list
+                    list_dict,
+                    orig_dict,
+                    new_aux_dict,
+                    rest_list,
                 )
         else:
             aux_dict[key] = orig_dict[key]
-            generate_all_combinations_aux(list_dict, orig_dict, aux_dict, rest_list)
+            generate_all_combinations_aux(
+                list_dict,
+                orig_dict,
+                aux_dict,
+                rest_list,
+            )
     else:
         list_dict.append(aux_dict)
 
@@ -186,7 +202,12 @@ def generate_all_combinations(
     """
     list_dict: list[dict[str, Any]] = []
     aux_dict: dict[str, Any] = {}
-    generate_all_combinations_aux(list_dict, original_dict, aux_dict, restriction_list)
+    generate_all_combinations_aux(
+        list_dict,
+        original_dict,
+        aux_dict,
+        restriction_list,
+    )
     return list_dict
 
 
@@ -247,14 +268,16 @@ def run_training(params: dict[str, Any]) -> None:
 
     with counter.get_lock():
         if worker_gpu_id is not None:
-            print(f"Training {counter.value} done " f"on physical GPU {worker_gpu_id}")
+            print(f"Training {counter.value} done on physical GPU {worker_gpu_id}")
         else:
             print(f"Training {counter.value} done")
 
         counter.value += 1
 
 
-def eliminate_experiments_done(dict_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def eliminate_experiments_done(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Remove any configurations (experiments) that have already been completed.
 
@@ -271,21 +294,19 @@ def eliminate_experiments_done(dict_list: list[dict[str, Any]]) -> list[dict[str
     if not dict_list:
         return dict_list
 
-    directory = dict_list[0]["evaluation_and_results"]["results_directory"]
-    if not os.path.isdir(directory):
+    directory = Path(dict_list[0]["evaluation_and_results"]["results_directory"])
+
+    if not directory.is_dir():
         return dict_list
 
-    folders = [
-        name
-        for name in os.listdir(directory)
-        if os.path.isdir(os.path.join(directory, name))
-    ]
+    folders = {path.name for path in directory.iterdir() if path.is_dir()}
 
     # If there are no subfolders, no experiments are completed yet
     if not folders:
         return dict_list
 
     new_dict_list = []
+
     for setting in dict_list:
         benchmark_config = setting["benchmark_config"]
         model_config = setting["model"]
@@ -311,6 +332,8 @@ def eliminate_experiments_done(dict_list: list[dict[str, Any]]) -> list[dict[str
             f"am_{training_parameters['aggreg_mult_scale']}"
         )
 
+        experiment_directory = directory / folder_name
+
         if folder_name in folders:
             # Check if a particular seed combination is already done
             training_seed = setting["benchmark_config"]["training_seed"]
@@ -322,7 +345,8 @@ def eliminate_experiments_done(dict_list: list[dict[str, Any]]) -> list[dict[str
                 f"train_time_tr_seed_{training_seed}"
                 f"_dd_seed_{data_distribution_seed}.txt"
             )
-            if file_name not in os.listdir(os.path.join(directory, folder_name)):
+
+            if not (experiment_directory / file_name).exists():
                 new_dict_list.append(setting)
         else:
             new_dict_list.append(setting)
@@ -330,7 +354,9 @@ def eliminate_experiments_done(dict_list: list[dict[str, Any]]) -> list[dict[str
     return new_dict_list
 
 
-def delegate_training_seeds(dict_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def delegate_training_seeds(
+    dict_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Generate configurations for all training seeds.
 
@@ -345,13 +371,16 @@ def delegate_training_seeds(dict_list: list[dict[str, Any]]) -> list[dict[str, A
         A new list of configurations, each with a unique training_seed.
     """
     new_dict_list = []
+
     for setting in dict_list:
         original_seed = setting["benchmark_config"]["training_seed"]
         nb_seeds = setting["benchmark_config"]["nb_training_seeds"]
+
         for i in range(nb_seeds):
             new_setting = copy.deepcopy(setting)
             new_setting["benchmark_config"]["training_seed"] = original_seed + i
             new_dict_list.append(new_setting)
+
     return new_dict_list
 
 
@@ -373,15 +402,18 @@ def delegate_data_distribution_seeds(
         A new list of configurations, each with a unique data_distribution_seed.
     """
     new_dict_list = []
+
     for setting in dict_list:
         original_seed = setting["benchmark_config"]["data_distribution_seed"]
         nb_seeds = setting["benchmark_config"]["nb_data_distribution_seeds"]
+
         for i in range(nb_seeds):
             new_setting = copy.deepcopy(setting)
             new_setting["benchmark_config"]["data_distribution_seed"] = (
                 original_seed + i
             )
             new_dict_list.append(new_setting)
+
     return new_dict_list
 
 
@@ -405,11 +437,14 @@ def remove_real_greater_declared(
         Valid experiment configurations.
     """
     new_dict_list = []
+
     for setting in dict_list:
         real_byz = setting["benchmark_config"]["f"]
         declared_byz = setting["benchmark_config"]["tolerated_f"]
+
         if declared_byz >= real_byz:
             new_dict_list.append(setting)
+
     return new_dict_list
 
 
@@ -430,9 +465,11 @@ def set_tolerated_f_equal_to_real_f(
         The modified list with 'tolerated_f' set to 'f'.
     """
     new_dict_list = []
+
     for setting in dict_list:
         setting["benchmark_config"]["tolerated_f"] = setting["benchmark_config"]["f"]
         new_dict_list.append(setting)
+
     return new_dict_list
 
 
@@ -543,10 +580,10 @@ def ensure_key_parameters(
             == "RobustOnlineFL"
         ):
             ta_params = setting["benchmark_config"]["training_algorithm"].get(
-                "parameters", {}
+                "parameters",
+                {},
             )
 
-            # Check for 'aggreg_freq_scale'
             if "aggreg_freq_scale" not in ta_params:
                 raise ValueError(
                     "Missing 'aggreg_freq_scale' in training algorithm "
@@ -554,13 +591,13 @@ def ensure_key_parameters(
                 )
 
             aggreg_freq_scale = ta_params["aggreg_freq_scale"]
+
             if aggreg_freq_scale < 1:
                 raise ValueError(
                     "Aggregation frequency scaling must be greater than "
                     f"or equal to 1 , but got {aggreg_freq_scale}"
                 )
 
-            # Check for 'local_steps_per_client'
             if "aggreg_mult_scale" not in ta_params:
                 raise ValueError(
                     "Missing 'aggreg_mult_scale' in training algorithm "
@@ -568,10 +605,11 @@ def ensure_key_parameters(
                 )
 
             aggreg_mult_scale = ta_params["aggreg_mult_scale"]
+
             if aggreg_mult_scale <= 0:
                 raise ValueError(
                     "Aggregation multiplicative scaling parameter must be positive, "
-                    "but got {aggreg_mult_scale}"
+                    f"but got {aggreg_mult_scale}"
                 )
 
     return dict_list
@@ -624,7 +662,7 @@ def ensure_optional_config_parameters(
 
 
 def run_benchmark(
-    cfg_file: str,
+    cfg_file: str | Path,
     nb_jobs: int = 1,
     gpu_ids: list[int] | None = None,
 ) -> None:
@@ -637,19 +675,22 @@ def run_benchmark(
 
     Parameters
     ----------
-    cfg_file : str
+    cfg_file : str or Path
         Path to the JSON configuration file describing the benchmark.
     nb_jobs : int, optional
         Number of training experiments to run in parallel.
     gpu_ids : list[int] or None, optional
         Physical GPU IDs on which training jobs are allowed to run.
     """
+    cfg_file = Path(cfg_file)
+
     # Attempt to load config file or create one if not found
     try:
-        with open(cfg_file) as file:
+        with cfg_file.open() as file:
             data = json.load(file)
 
         data = ensure_optional_config_parameters(data)
+
         if float(data["benchmark_config"]["size_train_set"]) == 1.0:
             print(
                 "WARNING: NO VALIDATION DATASET USED FOR "
@@ -660,10 +701,13 @@ def run_benchmark(
     except FileNotFoundError:
         print(f"'{cfg_file}' not found. Creating a default one...")
 
-        with open("config/config.json", "w") as f:
-            json.dump(default_config, f, indent=4)
+        default_config_path = Path("config") / "config.json"
+        default_config_path.parent.mkdir(parents=True, exist_ok=True)
 
-        print("'config/config.json' created successfully.")
+        with default_config_path.open("w") as file:
+            json.dump(default_config, file, indent=4)
+
+        print(f"'{default_config_path}' created successfully.")
         print("Please configure the experiment you want to run and re-run.")
 
         return
@@ -672,13 +716,19 @@ def run_benchmark(
         gpu_ids = []
 
     # Determine the results directory (default to ./results)
-    results_directory = data["evaluation_and_results"]["results_directory"]
-    os.makedirs(results_directory, exist_ok=True)
+    results_directory = Path(data["evaluation_and_results"]["results_directory"])
+    results_directory.mkdir(parents=True, exist_ok=True)
 
     # Save the current config inside the results directory
-    config_path = os.path.join(results_directory, "config.json")
-    with open(config_path, "w") as json_file:
-        json.dump(data, json_file, indent=4, separators=(",", ": "))
+    config_path = results_directory / "config.json"
+
+    with config_path.open("w") as json_file:
+        json.dump(
+            data,
+            json_file,
+            indent=4,
+            separators=(",", ": "),
+        )
 
     # Generate all combination dictionaries
     restriction_list = ["pre_aggregators", "milestones"]

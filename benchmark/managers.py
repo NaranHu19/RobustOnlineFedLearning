@@ -1,6 +1,6 @@
 import datetime
 import json
-import os
+from pathlib import Path
 from typing import Any, TypeVar, cast
 
 import numpy as np
@@ -19,8 +19,7 @@ class FileManager:
     """
 
     def __init__(self, params: dict[str, Any]) -> None:
-        self.files_path = (
-            f"{params['result_path']}/"
+        experiment_name = (
             f"{params['dataset_name']}_{params['model_name']}_"
             f"n_{params['nb_clients']}_"
             f"f_{params['nb_byz']}_"
@@ -34,53 +33,39 @@ class FileManager:
             f"lrd_{params['learning_rate_decay']}_"
             f"wd_{params['weight_decay']}_"
             f"af_{params['aggreg_freq_scale']}_"
-            f"am_{params['aggreg_mult_scale']}/"
+            f"am_{params['aggreg_mult_scale']}"
         )
-        os.makedirs(self.files_path, exist_ok=True)
 
-        with open(os.path.join(self.files_path, "day.txt"), "w") as file:
+        self.files_path = Path(params["result_path"]) / experiment_name
+        self.files_path.mkdir(parents=True, exist_ok=True)
+
+        with (self.files_path / "day.txt").open("w") as file:
             file.write(datetime.date.today().strftime("%d_%m_%y"))
 
-        self.models_path = (
-            f"{params['model_path']}/"
-            f"{params['dataset_name']}_{params['model_name']}_"
-            f"n_{params['nb_clients']}_"
-            f"f_{params['nb_byz']}_"
-            f"d_{params['declared_nb_byz']}_"
-            f"{params['data_distribution_name']}_"
-            f"{params['distribution_parameter']}_"
-            f"{params['aggregation_name']}_"
-            f"{'_'.join(params['pre_aggregation_names'])}_"
-            f"{params['attack_name']}_"
-            f"lr_{params['learning_rate']}_"
-            f"lrd_{params['learning_rate_decay']}_"
-            f"wd_{params['weight_decay']}_"
-            f"af_{params['aggreg_freq_scale']}_"
-            f"am_{params['aggreg_mult_scale']}/"
-        )
-        os.makedirs(self.models_path, exist_ok=True)
+        self.models_path = Path(params["model_path"]) / experiment_name
+        self.models_path.mkdir(parents=True, exist_ok=True)
 
-        with open(os.path.join(self.models_path, "day.txt"), "w") as file:
+        with (self.models_path / "day.txt").open("w") as file:
             file.write(datetime.date.today().strftime("%d_%m_%y"))
 
-    def set_experiment_path(self, path: str) -> None:
+    def set_experiment_path(self, path: str | Path) -> None:
         """
         Set the base path for experiment files.
 
         Parameters
         ----------
-        path : str
+        path : str or Path
             Path to the directory containing the experiment files.
         """
-        self.files_path = path
+        self.files_path = Path(path)
 
-    def get_experiment_path(self) -> str:
+    def get_experiment_path(self) -> Path:
         """
         Return the current experiment path.
 
         Returns
         -------
-        str
+        Path
             Path to the directory containing the experiment files.
         """
         return self.files_path
@@ -94,8 +79,9 @@ class FileManager:
         dict_to_save : dict[str, Any]
             Configuration dictionary to save.
         """
-        config_path = os.path.join(self.files_path, "config.json")
-        with open(config_path, "w") as json_file:
+        config_path = self.files_path / "config.json"
+
+        with config_path.open("w") as json_file:
             json.dump(
                 dict_to_save,
                 json_file,
@@ -118,7 +104,7 @@ class FileManager:
         file_name : str
             Name of the output file.
         """
-        file_path = os.path.join(self.files_path, file_name)
+        file_path = self.files_path / file_name
         np.savetxt(file_path, [array], fmt="%.4f", delimiter=",")
 
     def save_state_dict(
@@ -145,12 +131,13 @@ class FileManager:
         step : int
             Training step associated with the saved model.
         """
-        model_dir = os.path.join(
-            self.models_path, f"models_tr_seed_{training_seed}_dd_seed_{data_dist_seed}"
+        model_dir = (
+            self.models_path
+            / f"models_tr_seed_{training_seed}_dd_seed_{data_dist_seed}"
         )
-        os.makedirs(model_dir, exist_ok=True)
+        model_dir.mkdir(parents=True, exist_ok=True)
 
-        file_path = os.path.join(model_dir, f"model_step_{step}.pth")
+        file_path = model_dir / f"model_step_{step}.pth"
         torch.save(state_dict, file_path)
 
     def save_loss(
@@ -174,13 +161,13 @@ class FileManager:
         client_id : int
             Identifier of the client.
         """
-        loss_dir = os.path.join(
-            self.files_path,
-            f"train_loss_tr_seed_{training_seed}_dd_seed_{data_dist_seed}",
+        loss_dir = (
+            self.files_path
+            / f"train_loss_tr_seed_{training_seed}_dd_seed_{data_dist_seed}"
         )
-        os.makedirs(loss_dir, exist_ok=True)
+        loss_dir.mkdir(parents=True, exist_ok=True)
 
-        file_path = os.path.join(loss_dir, f"loss_client_{client_id}.txt")
+        file_path = loss_dir / f"loss_client_{client_id}.txt"
         np.savetxt(file_path, loss_array, fmt="%.6f", delimiter=",")
 
     def save_accuracy(
@@ -204,13 +191,13 @@ class FileManager:
         client_id : int
             Identifier of the client.
         """
-        acc_dir = os.path.join(
-            self.files_path,
-            f"train_accuracy_tr_seed_{training_seed}_dd_seed_{data_dist_seed}",
+        acc_dir = (
+            self.files_path
+            / f"train_accuracy_tr_seed_{training_seed}_dd_seed_{data_dist_seed}"
         )
-        os.makedirs(acc_dir, exist_ok=True)
+        acc_dir.mkdir(parents=True, exist_ok=True)
 
-        file_path = os.path.join(acc_dir, f"accuracy_client_{client_id}.txt")
+        file_path = acc_dir / f"accuracy_client_{client_id}.txt"
         np.savetxt(file_path, acc_array, fmt="%.4f", delimiter=",")
 
 
@@ -573,6 +560,7 @@ class ParamsManager:
     # ----------------------------------------------------------------------
     #  Model
     # ----------------------------------------------------------------------
+
     def get_model_name(self) -> str:
         """
         Return the model name.
@@ -702,6 +690,7 @@ class ParamsManager:
     # ----------------------------------------------------------------------
     #  Aggregator
     # ----------------------------------------------------------------------
+
     def get_aggregator_info(
         self,
     ) -> dict[str, str | dict[str, float]]:
@@ -752,6 +741,7 @@ class ParamsManager:
     # ----------------------------------------------------------------------
     #  Pre-Aggregators
     # ----------------------------------------------------------------------
+
     def get_preaggregators(
         self,
     ) -> list[dict[str, dict[str, float]]]:
@@ -771,6 +761,7 @@ class ParamsManager:
     # ----------------------------------------------------------------------
     #  Honest Nodes
     # ----------------------------------------------------------------------
+
     def get_honest_clients_batch_size(self) -> int:
         """
         Return the honest-client batch size.
@@ -839,6 +830,7 @@ class ParamsManager:
     # ----------------------------------------------------------------------
     #  Evaluation and Results Accessors
     # ----------------------------------------------------------------------
+
     def get_evaluation_delta(self) -> int:
         """
         Return the evaluation interval.

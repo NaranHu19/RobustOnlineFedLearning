@@ -169,7 +169,7 @@ def start_training(params: dict[str, Any]) -> None:
             "as client have not enough data for a complete training."
         )
 
-    # Initialize Honest Clients
+    # Initialize Clients
     clients = [
         OnlineClient(
             {
@@ -232,8 +232,9 @@ def start_training(params: dict[str, Any]) -> None:
     store_models = params_manager.get_store_models()
     store_per_client_metrics = params_manager.get_store_per_client_metrics()
 
-    val_accuracy_list = np.array([])
-    test_accuracy_list = np.array([])
+    val_accuracy_list = np.array([], dtype=float)
+    test_accuracy_list = np.array([], dtype=float)
+    evaluation_times = np.array([], dtype=int)
 
     start_time = time.time()
 
@@ -289,34 +290,21 @@ def start_training(params: dict[str, Any]) -> None:
     for k, num_local_updates in enumerate(local_updates):
         t_start = int(aggreg_times[k])
 
-        # Evaluate Global Model Every Evaluation Delta Steps
+        # Evaluate Global Model Every Evaluation Delta Aggregation Rounds
         if k % evaluation_delta == 0:
+            evaluation_times = np.append(
+                evaluation_times,
+                t_start,
+            )
+
             if val_loader is not None:
                 val_acc = server.compute_validation_accuracy()
 
                 val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
-                file_manager.write_array_in_file(
-                    val_accuracy_list,
-                    "val_accuracy_tr_seed_"
-                    + str(training_seed)
-                    + "_dd_seed_"
-                    + str(dd_seed)
-                    + ".txt",
-                )
-
             if evaluate_on_test:
                 test_acc = server.compute_test_accuracy()
                 test_accuracy_list = np.append(test_accuracy_list, test_acc)
-
-                file_manager.write_array_in_file(
-                    test_accuracy_list,
-                    "test_accuracy_tr_seed_"
-                    + str(training_seed)
-                    + "_dd_seed_"
-                    + str(dd_seed)
-                    + ".txt",
-                )
 
             if store_models:
                 file_manager.save_state_dict(
@@ -360,11 +348,20 @@ def start_training(params: dict[str, Any]) -> None:
 
         byz_weights = byz_client.apply_attack(honest_weights)
 
+        if len(byz_weights) != nb_byz_clients:
+            raise RuntimeError(
+                "Byzantine attack returned "
+                f"{len(byz_weights)} vectors, expected {nb_byz_clients}."
+            )
+
         for client_idx, malicious_weight in zip(
             idx_selected_byz_clients,
             byz_weights,
         ):
             client_weights[client_idx] = malicious_weight
+
+        if any(weight is None for weight in client_weights):
+            raise RuntimeError("At least one client submission was not constructed.")
 
         server.update_model_with_weights(client_weights)
 
@@ -379,10 +376,39 @@ def start_training(params: dict[str, Any]) -> None:
         + ".txt",
     )
 
+    evaluation_times = np.append(
+        evaluation_times,
+        int(aggreg_times[-1]),
+    )
+
+    file_manager.write_array_in_file(
+        evaluation_times,
+        "evaluation_times.txt",
+    )
+
+    file_manager.write_array_in_file(
+        aggreg_times,
+        "aggregation_times.txt",
+    )
+
+    file_manager.write_array_in_file(
+        byz_history.astype(int),
+        "byz_history_tr_seed_"
+        + str(training_seed)
+        + "_dd_seed_"
+        + str(dd_seed)
+        + ".txt",
+    )
+
     if val_loader is not None:
         val_acc = server.compute_validation_accuracy()
-
         val_accuracy_list = np.append(val_accuracy_list, val_acc)
+
+        if len(evaluation_times) != len(val_accuracy_list):
+            raise RuntimeError(
+                "Number of validation accuracies does not match "
+                "number of evaluation times."
+            )
 
         file_manager.write_array_in_file(
             val_accuracy_list,
@@ -396,6 +422,12 @@ def start_training(params: dict[str, Any]) -> None:
     if evaluate_on_test:
         test_acc = server.compute_test_accuracy()
         test_accuracy_list = np.append(test_accuracy_list, test_acc)
+
+        if len(evaluation_times) != len(test_accuracy_list):
+            raise RuntimeError(
+                "Number of test accuracies does not match "
+                "number of evaluation times."
+            )
 
         file_manager.write_array_in_file(
             test_accuracy_list,
