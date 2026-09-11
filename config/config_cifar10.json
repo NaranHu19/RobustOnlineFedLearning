@@ -1,0 +1,88 @@
+{
+    "benchmark_config": {
+        "training_algorithm": {
+            "name": "RobustOnlineFL",
+            "parameters": {
+                "aggreg_freq_scale": [1.001, 1.5, 2, 2.5],
+                "aggreg_mult_scale": 1
+            }
+        },
+        "nb_steps": 5000,
+        "device": "cuda",
+        "training_seed": 0,
+        "nb_training_seeds": 5,
+        "nb_clients": 10,
+        "f": [1, 2, 3, 4],
+        "data_distribution_seed": 0,
+        "nb_data_distribution_seeds": 1,
+        "data_distribution": [
+            {
+                "name": "dirichlet_niid",
+                "distribution_parameter": [0.2, 1.0, 100.0]
+            }
+        ]
+    },
+    "model": {
+        "name": "cnn_cifar",
+        "dataset_name": "cifar10",
+        "nb_labels": 10,
+        "loss": "NLLLoss",
+        "learning_rate": 0.25,
+        "learning_rate_decay": 0.66,
+        "weight_decay": 0.001
+    },
+    "aggregator": [
+        {
+            "name": "Average",
+            "parameters": {}
+        },
+        {
+            "name": "GeometricMedian",
+            "parameters": {
+                "nu": 0.0,
+                "T": 100
+            }
+        },
+        {
+            "name": "TrMean",
+            "parameters": {}
+        },
+        {
+            "name": "MultiKrum",
+            "parameters": {}
+        }
+    ],
+    "pre_aggregators": [
+        {
+            "name": "NNM",
+            "parameters": {}
+        }
+    ],
+    "honest_clients": {
+        "batch_size": 32
+    },
+    "attack": [
+        {
+            "name": "SignFlipping",
+            "parameters": {}
+        },
+        {
+            "name": "InnerProductManipulation",
+            "parameters": {}
+        },
+        {
+            "name": "ALittleIsEnough",
+            "parameters": {}
+        }
+    ],
+    "evaluation_and_results": {
+        "evaluation_delta": 1,
+        "batch_size_evaluation": 128,
+        "evaluate_on_test": true,
+        "store_per_client_metrics": true,
+        "store_models": true,
+        "data_folder": "./data",
+        "results_directory": "./results/cifar10",
+        "models_directory": "./models/cifar10"
+    }
+}
