@@ -12,7 +12,7 @@ RobustOnlineFedLearning/
 │   ├── managers.py
 │   └── train.py
 ├── config/                   # Configuration files
-│   ├── config_cifar.json
+│   ├── config_cifar10.json
 │   └── config_mnist.json
 ├── data/                     # Downloaded datasets
 │   ├── MNIST/
