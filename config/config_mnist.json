@@ -3,7 +3,7 @@
         "training_algorithm": {
             "name": "RobustOnlineFL",
             "parameters": {
-                "aggreg_freq_scale": [1.001, 1.5, 2, 2.5],
+                "aggreg_freq_scale": 1.001,
                 "aggreg_mult_scale": 1
             }
         },
@@ -12,13 +12,13 @@
         "training_seed": 0,
         "nb_training_seeds": 5,
         "nb_clients": 10,
-        "f": [1, 2, 3, 4],
+        "f": 3,
         "data_distribution_seed": 0,
         "nb_data_distribution_seeds": 1,
         "data_distribution": [
             {
                 "name": "dirichlet_niid",
-                "distribution_parameter": [0.2, 1.0, 100.0]
+                "distribution_parameter": 0.2
             }
         ]
     },
@@ -40,7 +40,7 @@
             "name": "GeometricMedian",
             "parameters": {
                 "nu": 0.0,
-                "T": 10
+                "T": 100
             }
         },
         {
@@ -64,14 +64,6 @@
     "attack": [
         {
             "name": "SignFlipping",
-            "parameters": {}
-        },
-        {
-            "name": "InnerProductManipulation",
-            "parameters": {}
-        },
-        {
-            "name": "ALittleIsEnough",
             "parameters": {}
         }
     ],
