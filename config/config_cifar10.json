@@ -40,7 +40,7 @@
             "name": "GeometricMedian",
             "parameters": {
                 "nu": 0.0,
-                "T": 100
+                "T": 10
             }
         },
         {
@@ -76,7 +76,7 @@
         }
     ],
     "evaluation_and_results": {
-        "evaluation_delta": 1,
+        "evaluation_delta": 50,
         "batch_size_evaluation": 128,
         "evaluate_on_test": true,
         "store_per_client_metrics": true,
