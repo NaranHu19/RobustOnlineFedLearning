@@ -376,16 +376,6 @@ def start_training(params: dict[str, Any]) -> None:
         + ".txt",
     )
 
-    evaluation_times = np.append(
-        evaluation_times,
-        int(aggreg_times[-1]),
-    )
-
-    file_manager.write_array_in_file(
-        evaluation_times,
-        "evaluation_times.txt",
-    )
-
     file_manager.write_array_in_file(
         aggreg_times,
         "aggregation_times.txt",
@@ -404,6 +394,15 @@ def start_training(params: dict[str, Any]) -> None:
     )
 
     if val_loader is not None:
+        evaluation_times = np.append(
+            evaluation_times,
+            int(aggreg_times[-1]),
+        )
+
+        file_manager.write_array_in_file(
+            evaluation_times,
+            "evaluation_times.txt",
+        )
         val_acc = server.compute_validation_accuracy()
         val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
