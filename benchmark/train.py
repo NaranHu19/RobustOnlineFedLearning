@@ -286,12 +286,31 @@ def start_training(params: dict[str, Any]) -> None:
     if np.any(local_updates <= 0):
         raise ValueError("Aggregation times must be strictly increasing.")
 
+    evaluation_times = np.append(
+        evaluation_times,
+        0,
+    )
+
+    if val_loader is not None:
+        val_acc = server.compute_validation_accuracy()
+        val_accuracy_list = np.append(val_accuracy_list, val_acc)
+
+    if evaluate_on_test:
+        test_acc = server.compute_test_accuracy()
+        test_accuracy_list = np.append(test_accuracy_list, test_acc)
+
+    if store_models:
+        file_manager.save_state_dict(
+            server.get_dict_parameters(), training_seed, dd_seed, 0
+        )
+
+    next_evaluation_time = evaluation_delta
+
     # Training Loop
     for k, num_local_updates in enumerate(local_updates):
         t_start = int(aggreg_times[k])
 
-        # Evaluate Global Model Every Evaluation Delta Aggregation Rounds
-        if k % evaluation_delta == 0:
+        if t_start > 0 and t_start >= next_evaluation_time:
             evaluation_times = np.append(
                 evaluation_times,
                 t_start,
@@ -299,7 +318,6 @@ def start_training(params: dict[str, Any]) -> None:
 
             if val_loader is not None:
                 val_acc = server.compute_validation_accuracy()
-
                 val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
             if evaluate_on_test:
@@ -310,6 +328,9 @@ def start_training(params: dict[str, Any]) -> None:
                 file_manager.save_state_dict(
                     server.get_dict_parameters(), training_seed, dd_seed, t_start
                 )
+
+            while next_evaluation_time <= t_start:
+                next_evaluation_time += evaluation_delta
 
         new_model = server.get_dict_parameters()
         for client in clients:
@@ -393,16 +414,20 @@ def start_training(params: dict[str, Any]) -> None:
         byz_history,
     )
 
-    if val_loader is not None:
+    final_time = int(aggreg_times[-1])
+
+    if evaluation_times[-1] != final_time:
         evaluation_times = np.append(
             evaluation_times,
-            int(aggreg_times[-1]),
+            final_time,
         )
 
         file_manager.write_array_in_file(
             evaluation_times,
             "evaluation_times.txt",
         )
+
+    if val_loader is not None:
         val_acc = server.compute_validation_accuracy()
         val_accuracy_list = np.append(val_accuracy_list, val_acc)
 
