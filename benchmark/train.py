@@ -267,8 +267,8 @@ def start_training(params: dict[str, Any]) -> None:
     nb_aggregation_rounds = len(local_updates)
     train_loss_list = np.zeros(nb_aggregation_rounds)
     byz_history = np.zeros(
-        (nb_aggregation_rounds, nb_clients),
-        dtype=bool,
+        (nb_aggregation_rounds, nb_byz_clients),
+        dtype=int,
     )
 
     if len(aggreg_times) < 2:
@@ -322,7 +322,7 @@ def start_training(params: dict[str, Any]) -> None:
         )
 
         byz_idx = set(idx_selected_byz_clients)
-        byz_history[k, idx_selected_byz_clients] = True
+        byz_history[k] = idx_selected_byz_clients
 
         train_loss_per_client = []
         honest_weights = []
@@ -391,13 +391,16 @@ def start_training(params: dict[str, Any]) -> None:
         "aggregation_times.txt",
     )
 
-    file_manager.write_array_in_file(
-        byz_history.astype(int),
-        "byz_history_tr_seed_"
-        + str(training_seed)
-        + "_dd_seed_"
-        + str(dd_seed)
-        + ".txt",
+    np.save(
+        file_manager.files_path
+        / (
+            "byz_history_tr_seed_"
+            + str(training_seed)
+            + "_dd_seed_"
+            + str(dd_seed)
+            + ".npy"
+        ),
+        byz_history,
     )
 
     if val_loader is not None:
