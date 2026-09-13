@@ -55,7 +55,7 @@
         "parameters": {}
     },
     "evaluation_and_results": {
-        "evaluation_delta": 50,
+        "evaluation_delta": 1,
         "batch_size_evaluation": 128,
         "evaluate_on_test": true,
         "store_per_client_metrics": true,
