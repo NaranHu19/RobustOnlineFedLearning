@@ -463,12 +463,11 @@ colors = [
     (0, 0.4470, 0.7410),
     (0.8500, 0.3250, 0.0980),
     (0.4660, 0.6740, 0.1880),
-    (120 / 255, 120 / 255, 120 / 255),
     (0.7, 0.2, 0.5),
 ]
 
-tab_sign = ["-", "--", "-.", ":", "solid"]
-markers = ["^", "s", "<", "o", "*"]
+tab_sign = ["-", "--", "-.", ":"]
+markers = ["o", "s", "^", "*"]
 
 
 def test_accuracy_curve(
@@ -609,6 +608,7 @@ def test_accuracy_curve(
                                 for am in am_list:
                                     for attack in attacks:
                                         plt.rcParams.update({"font.size": 12})
+                                        fig, ax = plt.subplots(figsize=(15.0, 10.0))
 
                                         attack_name = attack["name"]
 
@@ -757,29 +757,42 @@ def test_accuracy_curve(
 
                                             aggregator_name = agg["name"]
 
-                                            plt.plot(
+                                            ax.plot(
                                                 reference_times,
                                                 mean_accuracy,
                                                 label=aggregator_name,
                                                 color=colors[i],
                                                 linestyle=tab_sign[i],
                                                 marker=markers[i],
+                                                linewidth=2,
+                                                markersize=5,
                                                 markevery=1,
                                             )
 
-                                            plt.fill_between(
+                                            ax.fill_between(
                                                 reference_times,
                                                 mean_accuracy - err,
                                                 mean_accuracy + err,
-                                                alpha=0.25,
+                                                color=colors[i],
+                                                alpha=0.12,
                                             )
 
-                                        plt.xlabel("Time step $t$")
-                                        plt.ylabel("Accuracy")
-                                        plt.xlim(0, nb_steps)
-                                        plt.ylim(0, 1)
-                                        plt.grid()
-                                        plt.legend()
+                                        ax.set_xlabel("Step number")
+                                        ax.set_ylabel("Test accuracy")
+                                        ax.set_xlim(0, nb_steps)
+                                        ax.set_ylim(0, 1)
+                                        ax.grid(
+                                            True,
+                                            which="major",
+                                            linestyle="--",
+                                            linewidth=0.6,
+                                            alpha=0.4,
+                                        )
+                                        ax.legend(
+                                            loc="lower right",
+                                            frameon=True,
+                                            framealpha=0.9,
+                                        )
 
                                         plot_name = (
                                             f"{dataset_name}_"
@@ -795,8 +808,10 @@ def test_accuracy_curve(
                                             f"am_{am}"
                                         )
 
-                                        plt.savefig(
+                                        fig.tight_layout()
+
+                                        fig.savefig(
                                             path_to_plot / f"{plot_name}_plot.pdf"
                                         )
 
-                                        plt.close()
+                                        plt.close(fig)
