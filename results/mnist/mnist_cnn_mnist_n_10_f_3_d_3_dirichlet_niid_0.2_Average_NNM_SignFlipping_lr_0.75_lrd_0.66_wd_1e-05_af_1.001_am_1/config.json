@@ -1,7 +1,7 @@
 {
     "benchmark_config": {
         "device": "cuda",
-        "training_seed": 4,
+        "training_seed": 3,
         "nb_training_seeds": 5,
         "nb_clients": 10,
         "nb_honest_clients": 7,
@@ -55,7 +55,7 @@
         "parameters": {}
     },
     "evaluation_and_results": {
-        "evaluation_delta": 1,
+        "evaluation_delta": 50,
         "batch_size_evaluation": 128,
         "evaluate_on_test": true,
         "store_per_client_metrics": true,
