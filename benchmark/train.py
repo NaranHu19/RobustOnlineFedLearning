@@ -160,14 +160,14 @@ def start_training(params: dict[str, Any]) -> None:
     )
     client_dataloaders = data_distributor.split_data()
 
-    max_client_train_size = max(
-        len(client_dataloaders[i].dataset) for i in range(nb_clients)
-    )
-    if nb_training_steps > max_client_train_size:
-        raise ValueError(
-            "Reduce the maximum amount of local steps, "
-            "as client have not enough data for a complete training."
-        )
+    #max_client_train_size = max(
+    #    len(client_dataloaders[i].dataset) for i in range(nb_clients)
+    #)
+    #if nb_training_steps > max_client_train_size:
+    #    raise ValueError(
+    #        "Reduce the maximum amount of local steps, "
+    #        "as client have not enough data for a complete training."
+    #    )
 
     # Initialize Clients
     clients = [
