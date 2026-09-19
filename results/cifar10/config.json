@@ -72,7 +72,7 @@
     },
     "attack": [
         {
-            "name": "ALittleIsEnough",
+            "name": "Optimal_ALittleIsEnough",
             "parameters": {}
         }
     ],
