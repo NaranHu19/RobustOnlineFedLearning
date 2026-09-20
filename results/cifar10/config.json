@@ -24,10 +24,10 @@
         "size_train_set": 0.8
     },
     "model": {
-        "name": "cnn_cifar",
+        "name": "cifar_Net",
         "dataset_name": "cifar10",
         "nb_labels": 10,
-        "loss": "CrossEntropyLoss",
+        "loss": "NLLLoss",
         "learning_rate": [
             0.25,
             0.5,
