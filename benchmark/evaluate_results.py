@@ -458,16 +458,29 @@ def find_best_hyperparameters(path_to_results: str | Path) -> None:
                                                 step_val,
                                             )
 
-
 colors = [
-    (0, 0.4470, 0.7410),
-    (0.8500, 0.3250, 0.0980),
-    (0.4660, 0.6740, 0.1880),
-    (0.7, 0.2, 0.5),
+    (0.122, 0.467, 0.706),
+    (1.000, 0.498, 0.055),
+    (0.173, 0.627, 0.173),
+    (0.839, 0.153, 0.157),
+    (0.580, 0.404, 0.741),
 ]
 
-tab_sign = ["-", "--", "-.", ":"]
-markers = ["o", "s", "^", "*"]
+tab_sign = [
+    "-",
+    "--",
+    "-.",
+    ":",
+    (0, (3, 1, 1, 1)),
+]
+
+markers = [
+    "o",  # circle
+    "s",  # square
+    "^",  # triangle
+    "D",  # diamond
+    "v",  # downward triangle
+]
 
 
 def test_accuracy_curve(
