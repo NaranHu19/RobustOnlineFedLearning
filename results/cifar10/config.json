@@ -3,7 +3,13 @@
         "training_algorithm": {
             "name": "RobustOnlineFL",
             "parameters": {
-                "aggreg_freq_scale": 1.001,
+                "aggreg_freq_scale": [
+                    1.001,
+                    2.0,
+                    10.0,
+                    25.0,
+                    100.0
+                ],
                 "aggreg_mult_scale": 1
             }
         },
@@ -23,7 +29,10 @@
         "data_distribution": [
             {
                 "name": "dirichlet_niid",
-                "distribution_parameter": 10.0
+                "distribution_parameter": [
+                    1.0,
+                    10.0
+                ]
             }
         ],
         "size_train_set": 0.8
@@ -80,6 +89,14 @@
         "batch_size": 64
     },
     "attack": [
+        {
+            "name": "SignFlipping",
+            "parameters": {}
+        },
+        {
+            "name": "Optimal_InnerProductManipulation",
+            "parameters": {}
+        },
         {
             "name": "Optimal_ALittleIsEnough",
             "parameters": {}
