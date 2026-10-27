@@ -3,7 +3,7 @@
         "training_algorithm": {
             "name": "RobustOnlineFL",
             "parameters": {
-                "aggreg_freq_scale": [1.001, 1.5, 2.0, 2.5],
+                "aggreg_freq_scale": [1.001, 2.0, 3.0, 5.0],
                 "aggreg_mult_scale": 1
             }
         },
@@ -29,7 +29,7 @@
         "loss": "NLLLoss",
         "learning_rate": 0.75,
         "learning_rate_decay": 0.66,
-        "weight_decay": 0.00001
+        "weight_decay": 0.0001
     },
     "aggregator": [
         {
@@ -40,7 +40,7 @@
             "name": "GeometricMedian",
             "parameters": {
                 "nu": 0.0,
-                "T": 100
+                "T": 10.0
             }
         },
         {
@@ -66,12 +66,12 @@
             "name": "SignFlipping",
             "parameters": {}
         },
-	{
-            "name": "InnerProductManipulation",
+        {
+            "name": "Optimal_InnerProductManipulation",
             "parameters": {}
         },
         {
-            "name": "ALittleIsEnough",
+            "name": "Optimal_ALittleIsEnough",
             "parameters": {}
         }
     ],
@@ -80,7 +80,7 @@
         "batch_size_evaluation": 128,
         "evaluate_on_test": true,
         "store_per_client_metrics": true,
-        "store_models": true,
+        "store_models": false,
         "data_folder": "./data",
         "results_directory": "./results/mnist",
         "models_directory": "./models/mnist"
