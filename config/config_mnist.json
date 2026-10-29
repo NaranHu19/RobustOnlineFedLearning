@@ -40,7 +40,7 @@
             "name": "GeometricMedian",
             "parameters": {
                 "nu": 0.0,
-                "T": 10.0
+                "T": 10
             }
         },
         {
