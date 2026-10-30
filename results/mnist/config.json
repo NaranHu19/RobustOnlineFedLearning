@@ -17,12 +17,7 @@
         "training_seed": 0,
         "nb_training_seeds": 5,
         "nb_clients": 10,
-        "f": [
-            1,
-            2,
-            3,
-            4
-        ],
+        "f": 0,
         "data_distribution_seed": 0,
         "nb_data_distribution_seeds": 1,
         "data_distribution": [
@@ -50,27 +45,6 @@
         {
             "name": "Average",
             "parameters": {}
-        },
-        {
-            "name": "GeometricMedian",
-            "parameters": {
-                "nu": 0.0,
-                "T": 10
-            }
-        },
-        {
-            "name": "TrMean",
-            "parameters": {}
-        },
-        {
-            "name": "MultiKrum",
-            "parameters": {}
-        }
-    ],
-    "pre_aggregators": [
-        {
-            "name": "NNM",
-            "parameters": {}
         }
     ],
     "honest_clients": {
@@ -78,15 +52,7 @@
     },
     "attack": [
         {
-            "name": "SignFlipping",
-            "parameters": {}
-        },
-        {
-            "name": "Optimal_InnerProductManipulation",
-            "parameters": {}
-        },
-        {
-            "name": "Optimal_ALittleIsEnough",
+            "name": "NoAttack",
             "parameters": {}
         }
     ],
