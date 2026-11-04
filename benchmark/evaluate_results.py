@@ -458,6 +458,7 @@ def find_best_hyperparameters(path_to_results: str | Path) -> None:
                                                 step_val,
                                             )
 
+
 colors = [
     (0.122, 0.467, 0.706),
     (1.000, 0.498, 0.055),
@@ -466,7 +467,7 @@ colors = [
     (0.580, 0.404, 0.741),
 ]
 
-tab_sign = [
+tab_sign: list[str | tuple[int, tuple[int, ...]]] = [
     "-",
     "--",
     "-.",
@@ -487,7 +488,7 @@ def test_accuracy_curve(
     path_to_results: str | Path,
     path_to_plot: str | Path,
     colors: list[tuple[float, float, float]] = colors,
-    tab_sign: list[str] = tab_sign,
+    tab_sign: list[str | tuple[int, tuple[int, ...]]] = tab_sign,
     markers: list[str] = markers,
 ) -> None:
     """
@@ -625,18 +626,39 @@ def test_accuracy_curve(
 
                                         attack_name = attack["name"]
 
-                                        for i, agg in enumerate(aggregators):
+                                        plot_aggregators = [
+                                            (agg, False) for agg in aggregators
+                                        ]
+                                        plot_aggregators.insert(
+                                            0, ({"name": "Average"}, True)
+                                        )
+
+                                        for i, (agg, is_benchmark) in enumerate(
+                                            plot_aggregators
+                                        ):
+                                            i = i - 1
+                                            f_plot = 0 if is_benchmark else nb_byzantine
+                                            d_plot = 0 if is_benchmark else nb_decl
+                                            attack_plot = (
+                                                "NoAttack"
+                                                if is_benchmark
+                                                else attack_name
+                                            )
+                                            pre_agg_plot = (
+                                                "" if is_benchmark else pre_agg_names
+                                            )
+
                                             hyper_file_name = (
                                                 f"{dataset_name}_"
                                                 f"{model_name}_"
                                                 f"n_{nb_client}_"
-                                                f"f_{nb_byzantine}_"
-                                                f"d_{nb_decl}_"
+                                                f"f_{f_plot}_"
+                                                f"d_{d_plot}_"
                                                 f"{custom_dict_to_str(
                                                     data_dist['name']
                                                 )}_"
                                                 f"{dist_parameter}_"
-                                                f"{pre_agg_names}_"
+                                                f"{pre_agg_plot}_"
                                                 f"{agg['name']}_"
                                                 f"af_{af}_"
                                                 f"am_{am}.txt"
@@ -671,8 +693,8 @@ def test_accuracy_curve(
                                                         f"{dataset_name}_"
                                                         f"{model_name}_"
                                                         f"n_{nb_client}_"
-                                                        f"f_{nb_byzantine}_"
-                                                        f"d_{nb_decl}_"
+                                                        f"f_{f_plot}_"
+                                                        f"d_{d_plot}_"
                                                         f"{custom_dict_to_str(
                                                             data_dist['name']
                                                         )}_"
@@ -680,9 +702,9 @@ def test_accuracy_curve(
                                                         f"{custom_dict_to_str(
                                                             agg['name']
                                                         )}_"
-                                                        f"{pre_agg_names}_"
+                                                        f"{pre_agg_plot}_"
                                                         f"{custom_dict_to_str(
-                                                            attack_name
+                                                           attack_plot
                                                         )}_"
                                                         f"lr_{lr}_"
                                                         f"lrd_{lrd}_"
@@ -773,10 +795,18 @@ def test_accuracy_curve(
                                             ax.plot(
                                                 reference_times,
                                                 mean_accuracy,
-                                                label=aggregator_name,
-                                                color=colors[i],
-                                                linestyle=tab_sign[i],
-                                                marker=markers[i],
+                                                label="D-SGD"
+                                                if is_benchmark
+                                                else aggregator_name,
+                                                color="black"
+                                                if is_benchmark
+                                                else colors[i],
+                                                linestyle="--"
+                                                if is_benchmark
+                                                else tab_sign[i],
+                                                marker=None
+                                                if is_benchmark
+                                                else markers[i],
                                                 linewidth=2,
                                                 markersize=5,
                                                 markevery=1,
@@ -786,7 +816,9 @@ def test_accuracy_curve(
                                                 reference_times,
                                                 mean_accuracy - err,
                                                 mean_accuracy + err,
-                                                color=colors[i],
+                                                color="black"
+                                                if is_benchmark
+                                                else colors[i],
                                                 alpha=0.12,
                                             )
 
