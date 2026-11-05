@@ -37,6 +37,10 @@
             "parameters": {}
         },
         {
+            "name": "Median",
+            "parameters": {}
+        },
+        {
             "name": "GeometricMedian",
             "parameters": {
                 "nu": 0.0,
